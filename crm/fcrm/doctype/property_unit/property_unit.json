@@ -1,0 +1,199 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "hash",
+ "creation": "2026-03-28 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "details_tab",
+  "unit_number",
+  "project",
+  "column_break_pu01",
+  "unit_type",
+  "status",
+  "section_break_pu02",
+  "floor",
+  "size_sqm",
+  "column_break_pu03",
+  "view_direction",
+  "linked_deal",
+  "pricing_section",
+  "base_price",
+  "column_break_pu04",
+  "price_override",
+  "attachments_section",
+  "floor_plan",
+  "notes_section",
+  "notes"
+ ],
+ "fields": [
+  {
+   "fieldname": "details_tab",
+   "fieldtype": "Tab Break",
+   "label": "Details"
+  },
+  {
+   "fieldname": "unit_number",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Unit Number",
+   "reqd": 1
+  },
+  {
+   "fieldname": "project",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Project",
+   "options": "Real Estate Project",
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_pu01",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "unit_type",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Unit Type",
+   "options": "Studio\n1BR\n2BR\n3BR\n4BR\nPenthouse"
+  },
+  {
+   "default": "Available",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Status",
+   "options": "Available\nReserved\nSold\nBlocked"
+  },
+  {
+   "fieldname": "section_break_pu02",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "floor",
+   "fieldtype": "Int",
+   "in_list_view": 1,
+   "label": "Floor"
+  },
+  {
+   "fieldname": "size_sqm",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Size (sqm)"
+  },
+  {
+   "fieldname": "column_break_pu03",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "view_direction",
+   "fieldtype": "Select",
+   "label": "View Direction",
+   "options": "\nGarden\nCity\nSea\nCourtyard\nStreet"
+  },
+  {
+   "fieldname": "linked_deal",
+   "fieldtype": "Link",
+   "label": "Linked Deal",
+   "options": "CRM Deal",
+   "read_only": 1
+  },
+  {
+   "fieldname": "pricing_section",
+   "fieldtype": "Section Break",
+   "label": "Pricing"
+  },
+  {
+   "fieldname": "base_price",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Base Price",
+   "options": "currency"
+  },
+  {
+   "fieldname": "column_break_pu04",
+   "fieldtype": "Column Break"
+  },
+  {
+   "description": "If set, overrides base price for display",
+   "fieldname": "price_override",
+   "fieldtype": "Currency",
+   "label": "Price Override",
+   "options": "currency"
+  },
+  {
+   "fieldname": "attachments_section",
+   "fieldtype": "Section Break",
+   "label": "Floor Plan"
+  },
+  {
+   "fieldname": "floor_plan",
+   "fieldtype": "Attach",
+   "label": "Floor Plan"
+  },
+  {
+   "fieldname": "notes_section",
+   "fieldtype": "Section Break",
+   "label": "Notes"
+  },
+  {
+   "fieldname": "notes",
+   "fieldtype": "Small Text",
+   "label": "Notes"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-03-28 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "FCRM",
+ "name": "Property Unit",
+ "naming_rule": "Random",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Sales Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Sales User",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "show_title_field_in_link": 1,
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "unit_number",
+ "track_changes": 1
+}

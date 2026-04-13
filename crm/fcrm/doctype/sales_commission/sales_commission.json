@@ -1,0 +1,247 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "hash",
+ "creation": "2026-03-30 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "details_tab",
+  "deal",
+  "agent",
+  "agent_name",
+  "column_break_sc01",
+  "role",
+  "status",
+  "trigger_event",
+  "property_section",
+  "project",
+  "column_break_sc02",
+  "unit",
+  "commission_section",
+  "commission_base",
+  "commission_rate",
+  "commission_amount",
+  "column_break_sc03",
+  "split_percentage",
+  "final_commission",
+  "approval_section",
+  "approved_by",
+  "approved_date",
+  "column_break_sc04",
+  "paid_date",
+  "notes_section",
+  "notes"
+ ],
+ "fields": [
+  {
+   "fieldname": "details_tab",
+   "fieldtype": "Tab Break",
+   "label": "Details"
+  },
+  {
+   "fieldname": "deal",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Deal",
+   "options": "CRM Deal",
+   "reqd": 1
+  },
+  {
+   "fieldname": "agent",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Sales Agent",
+   "options": "User",
+   "reqd": 1
+  },
+  {
+   "fetch_from": "agent.full_name",
+   "fieldname": "agent_name",
+   "fieldtype": "Data",
+   "label": "Agent Name",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_sc01",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "role",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Agent Role",
+   "options": "Primary Agent\nCo-Agent\nReferrer\nManager Override"
+  },
+  {
+   "default": "Pending",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Status",
+   "options": "Pending\nApproved\nPaid\nCancelled"
+  },
+  {
+   "fieldname": "trigger_event",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Payable When",
+   "options": "On Reservation\nOn Contract Signing\nOn Full Payment"
+  },
+  {
+   "fieldname": "property_section",
+   "fieldtype": "Section Break",
+   "label": "Property"
+  },
+  {
+   "fetch_from": "deal.re_project",
+   "fieldname": "project",
+   "fieldtype": "Link",
+   "label": "Project",
+   "options": "Real Estate Project",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_sc02",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fetch_from": "deal.re_unit",
+   "fieldname": "unit",
+   "fieldtype": "Link",
+   "label": "Unit",
+   "options": "Property Unit",
+   "read_only": 1
+  },
+  {
+   "fieldname": "commission_section",
+   "fieldtype": "Section Break",
+   "label": "Commission"
+  },
+  {
+   "fieldname": "commission_base",
+   "fieldtype": "Currency",
+   "label": "Commission Base (Purchase Price)",
+   "options": "currency",
+   "read_only": 1
+  },
+  {
+   "fieldname": "commission_rate",
+   "fieldtype": "Percent",
+   "in_list_view": 1,
+   "label": "Commission Rate %"
+  },
+  {
+   "fieldname": "commission_amount",
+   "fieldtype": "Currency",
+   "label": "Commission Amount",
+   "options": "currency",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_sc03",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "100",
+   "fieldname": "split_percentage",
+   "fieldtype": "Percent",
+   "label": "Split %"
+  },
+  {
+   "fieldname": "final_commission",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Final Commission",
+   "options": "currency",
+   "read_only": 1
+  },
+  {
+   "fieldname": "approval_section",
+   "fieldtype": "Section Break",
+   "label": "Approval"
+  },
+  {
+   "fieldname": "approved_by",
+   "fieldtype": "Link",
+   "label": "Approved By",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "approved_date",
+   "fieldtype": "Date",
+   "label": "Approved Date",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_sc04",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "paid_date",
+   "fieldtype": "Date",
+   "label": "Paid Date"
+  },
+  {
+   "fieldname": "notes_section",
+   "fieldtype": "Section Break",
+   "label": "Notes"
+  },
+  {
+   "fieldname": "notes",
+   "fieldtype": "Small Text",
+   "label": "Notes"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-03-30 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "FCRM",
+ "name": "Sales Commission",
+ "naming_rule": "Random",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Sales Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Sales User",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}

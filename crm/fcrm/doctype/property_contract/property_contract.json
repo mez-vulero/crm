@@ -1,0 +1,239 @@
+{
+ "actions": [],
+ "autoname": "naming_series:",
+ "creation": "2026-03-30 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "details_tab",
+  "naming_series",
+  "deal",
+  "lead",
+  "column_break_pc01",
+  "status",
+  "contract_date",
+  "deed_date",
+  "buyer_section",
+  "buyer_name",
+  "buyer_email",
+  "column_break_pc02",
+  "buyer_phone",
+  "purchase_price",
+  "property_section",
+  "project",
+  "column_break_pc03",
+  "unit",
+  "template_section",
+  "template",
+  "column_break_pc04",
+  "signed_date",
+  "contract_body_section",
+  "contract_body",
+  "attachment_section",
+  "pdf_attachment"
+ ],
+ "fields": [
+  {
+   "fieldname": "details_tab",
+   "fieldtype": "Tab Break",
+   "label": "Details"
+  },
+  {
+   "default": "CONT-.YYYY.-",
+   "fieldname": "naming_series",
+   "fieldtype": "Select",
+   "label": "Naming Series",
+   "options": "CONT-.YYYY.-"
+  },
+  {
+   "fieldname": "deal",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Deal",
+   "options": "CRM Deal",
+   "reqd": 1
+  },
+  {
+   "fieldname": "lead",
+   "fieldtype": "Link",
+   "label": "Lead",
+   "options": "CRM Lead"
+  },
+  {
+   "fieldname": "column_break_pc01",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "Draft",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Status",
+   "options": "Draft\nSent\nSigned\nCancelled"
+  },
+  {
+   "default": "Today",
+   "fieldname": "contract_date",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "label": "Contract Date"
+  },
+  {
+   "fieldname": "deed_date",
+   "fieldtype": "Date",
+   "label": "Deed Date"
+  },
+  {
+   "fieldname": "buyer_section",
+   "fieldtype": "Section Break",
+   "label": "Buyer Details"
+  },
+  {
+   "fieldname": "buyer_name",
+   "fieldtype": "Data",
+   "label": "Buyer Name"
+  },
+  {
+   "fieldname": "buyer_email",
+   "fieldtype": "Data",
+   "label": "Buyer Email",
+   "options": "Email"
+  },
+  {
+   "fieldname": "column_break_pc02",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "buyer_phone",
+   "fieldtype": "Data",
+   "label": "Buyer Phone"
+  },
+  {
+   "fetch_from": "deal.re_purchase_price",
+   "fieldname": "purchase_price",
+   "fieldtype": "Currency",
+   "label": "Purchase Price",
+   "options": "currency",
+   "read_only": 1
+  },
+  {
+   "fieldname": "property_section",
+   "fieldtype": "Section Break",
+   "label": "Property"
+  },
+  {
+   "fetch_from": "deal.re_project",
+   "fieldname": "project",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Project",
+   "options": "Real Estate Project",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_pc03",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fetch_from": "deal.re_unit",
+   "fieldname": "unit",
+   "fieldtype": "Link",
+   "label": "Unit",
+   "options": "Property Unit",
+   "read_only": 1
+  },
+  {
+   "fieldname": "template_section",
+   "fieldtype": "Section Break",
+   "label": "Contract Template"
+  },
+  {
+   "fieldname": "template",
+   "fieldtype": "Link",
+   "label": "Template",
+   "options": "Contract Template"
+  },
+  {
+   "fieldname": "column_break_pc04",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "signed_date",
+   "fieldtype": "Date",
+   "label": "Signed Date",
+   "read_only": 1
+  },
+  {
+   "fieldname": "contract_body_section",
+   "fieldtype": "Section Break",
+   "label": "Contract Body"
+  },
+  {
+   "fieldname": "contract_body",
+   "fieldtype": "Text Editor",
+   "label": "Contract Body",
+   "read_only": 1
+  },
+  {
+   "fieldname": "attachment_section",
+   "fieldtype": "Section Break",
+   "label": "Attachment"
+  },
+  {
+   "fieldname": "pdf_attachment",
+   "fieldtype": "Attach",
+   "label": "PDF Attachment",
+   "read_only": 1
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-03-30 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "FCRM",
+ "name": "Property Contract",
+ "naming_rule": "By \"Naming Series\" field",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Sales Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Sales User",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}

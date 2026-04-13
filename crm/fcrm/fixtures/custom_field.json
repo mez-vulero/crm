@@ -1,0 +1,242 @@
+[
+ {
+  "doctype": "Custom Field",
+  "dt": "CRM Deal",
+  "fieldname": "re_section_break",
+  "fieldtype": "Section Break",
+  "insert_after": "lost_notes",
+  "label": "Real Estate",
+  "module": "FCRM",
+  "name": "CRM Deal-re_section_break"
+ },
+ {
+  "doctype": "Custom Field",
+  "dt": "CRM Deal",
+  "fieldname": "re_project",
+  "fieldtype": "Link",
+  "insert_after": "re_section_break",
+  "label": "Project",
+  "module": "FCRM",
+  "name": "CRM Deal-re_project",
+  "options": "Real Estate Project"
+ },
+ {
+  "doctype": "Custom Field",
+  "dt": "CRM Deal",
+  "fieldname": "re_unit",
+  "fieldtype": "Link",
+  "insert_after": "re_project",
+  "label": "Unit",
+  "module": "FCRM",
+  "name": "CRM Deal-re_unit",
+  "options": "Property Unit"
+ },
+ {
+  "doctype": "Custom Field",
+  "dt": "CRM Deal",
+  "fieldname": "re_unit_status",
+  "fetch_from": "re_unit.status",
+  "fieldtype": "Data",
+  "insert_after": "re_unit",
+  "label": "Unit Status",
+  "module": "FCRM",
+  "name": "CRM Deal-re_unit_status",
+  "read_only": 1
+ },
+ {
+  "doctype": "Custom Field",
+  "dt": "CRM Deal",
+  "fieldname": "re_column_break_01",
+  "fieldtype": "Column Break",
+  "insert_after": "re_unit_status",
+  "module": "FCRM",
+  "name": "CRM Deal-re_column_break_01"
+ },
+ {
+  "doctype": "Custom Field",
+  "dt": "CRM Deal",
+  "fieldname": "re_purchase_price",
+  "fieldtype": "Currency",
+  "insert_after": "re_column_break_01",
+  "label": "Purchase Price",
+  "module": "FCRM",
+  "name": "CRM Deal-re_purchase_price",
+  "options": "currency"
+ },
+ {
+  "doctype": "Custom Field",
+  "dt": "CRM Deal",
+  "fieldname": "re_reservation_date",
+  "fieldtype": "Date",
+  "insert_after": "re_purchase_price",
+  "label": "Reservation Date",
+  "module": "FCRM",
+  "name": "CRM Deal-re_reservation_date"
+ },
+ {
+  "doctype": "Custom Field",
+  "dt": "CRM Deal",
+  "fieldname": "re_contract_date",
+  "fieldtype": "Date",
+  "insert_after": "re_reservation_date",
+  "label": "Contract Date",
+  "module": "FCRM",
+  "name": "CRM Deal-re_contract_date"
+ },
+ {
+  "doctype": "Custom Field",
+  "dt": "CRM Deal",
+  "fieldname": "re_dates_section",
+  "fieldtype": "Section Break",
+  "insert_after": "re_contract_date",
+  "module": "FCRM",
+  "name": "CRM Deal-re_dates_section"
+ },
+ {
+  "doctype": "Custom Field",
+  "dt": "CRM Deal",
+  "fieldname": "re_deed_date",
+  "fieldtype": "Date",
+  "insert_after": "re_dates_section",
+  "label": "Deed / Transfer Date",
+  "module": "FCRM",
+  "name": "CRM Deal-re_deed_date"
+ },
+ {
+  "doctype": "Custom Field",
+  "dt": "CRM Deal",
+  "fieldname": "re_mortgage_status",
+  "default": "Not Applicable",
+  "fieldtype": "Select",
+  "insert_after": "re_deed_date",
+  "label": "Mortgage Status",
+  "module": "FCRM",
+  "name": "CRM Deal-re_mortgage_status",
+  "options": "Not Applicable\nPending\nApproved\nRejected"
+ },
+ {
+  "doctype": "Custom Field",
+  "dt": "CRM Deal",
+  "fieldname": "re_column_break_02",
+  "fieldtype": "Column Break",
+  "insert_after": "re_mortgage_status",
+  "module": "FCRM",
+  "name": "CRM Deal-re_column_break_02"
+ },
+ {
+  "doctype": "Custom Field",
+  "dt": "CRM Deal",
+  "fieldname": "re_commission_rate",
+  "fieldtype": "Percent",
+  "insert_after": "re_column_break_02",
+  "label": "Commission %",
+  "module": "FCRM",
+  "name": "CRM Deal-re_commission_rate"
+ },
+ {
+  "doctype": "Custom Field",
+  "dt": "CRM Deal",
+  "fieldname": "re_commission_amount",
+  "fieldtype": "Currency",
+  "insert_after": "re_commission_rate",
+  "label": "Commission Amount",
+  "module": "FCRM",
+  "name": "CRM Deal-re_commission_amount",
+  "options": "currency",
+  "read_only": 1
+ },
+ {
+  "doctype": "Custom Field",
+  "dt": "CRM Deal",
+  "fieldname": "re_payment_schedule_section",
+  "fieldtype": "Section Break",
+  "insert_after": "re_commission_amount",
+  "label": "Payment Schedule",
+  "module": "FCRM",
+  "name": "CRM Deal-re_payment_schedule_section"
+ },
+ {
+  "doctype": "Custom Field",
+  "dt": "CRM Deal",
+  "fieldname": "re_payment_schedule",
+  "fieldtype": "Table",
+  "insert_after": "re_payment_schedule_section",
+  "label": "Payment Schedule",
+  "module": "FCRM",
+  "name": "CRM Deal-re_payment_schedule",
+  "options": "Payment Schedule"
+ },
+ {
+  "doctype": "Custom Field",
+  "dt": "CRM Lead",
+  "fieldname": "re_section_break",
+  "fieldtype": "Section Break",
+  "insert_after": "lost_notes",
+  "label": "Property Interest",
+  "module": "FCRM",
+  "name": "CRM Lead-re_section_break"
+ },
+ {
+  "doctype": "Custom Field",
+  "dt": "CRM Lead",
+  "fieldname": "re_interested_project",
+  "fieldtype": "Link",
+  "insert_after": "re_section_break",
+  "label": "Interested In",
+  "module": "FCRM",
+  "name": "CRM Lead-re_interested_project",
+  "options": "Real Estate Project"
+ },
+ {
+  "doctype": "Custom Field",
+  "dt": "CRM Lead",
+  "fieldname": "re_preferred_unit_type",
+  "fieldtype": "Select",
+  "insert_after": "re_interested_project",
+  "label": "Preferred Unit Type",
+  "module": "FCRM",
+  "name": "CRM Lead-re_preferred_unit_type",
+  "options": "\nStudio\n1BR\n2BR\n3BR\n4BR\nPenthouse"
+ },
+ {
+  "doctype": "Custom Field",
+  "dt": "CRM Lead",
+  "fieldname": "re_column_break_01",
+  "fieldtype": "Column Break",
+  "insert_after": "re_preferred_unit_type",
+  "module": "FCRM",
+  "name": "CRM Lead-re_column_break_01"
+ },
+ {
+  "doctype": "Custom Field",
+  "dt": "CRM Lead",
+  "fieldname": "re_budget_min",
+  "fieldtype": "Currency",
+  "insert_after": "re_column_break_01",
+  "label": "Min Budget",
+  "module": "FCRM",
+  "name": "CRM Lead-re_budget_min",
+  "options": "currency"
+ },
+ {
+  "doctype": "Custom Field",
+  "dt": "CRM Lead",
+  "fieldname": "re_budget_max",
+  "fieldtype": "Currency",
+  "insert_after": "re_budget_min",
+  "label": "Max Budget",
+  "module": "FCRM",
+  "name": "CRM Lead-re_budget_max",
+  "options": "currency"
+ },
+ {
+  "doctype": "Custom Field",
+  "dt": "CRM Lead",
+  "fieldname": "re_preferred_floor",
+  "fieldtype": "Int",
+  "insert_after": "re_budget_max",
+  "label": "Preferred Floor",
+  "module": "FCRM",
+  "name": "CRM Lead-re_preferred_floor"
+ }
+]
