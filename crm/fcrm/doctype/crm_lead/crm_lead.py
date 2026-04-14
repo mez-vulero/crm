@@ -213,8 +213,21 @@ class CRMLead(Document):
 		return contact.name
 
 	def create_organization(self, existing_organization=None):
-		# Organization creation skipped — not used in real estate CRM context
-		return existing_organization or self.organization or None
+		"""Return a valid CRM Organization name for linking on the new deal.
+
+		Organization records are intentionally not auto-created in this real
+		estate CRM. If the caller passed an `existing_organization`, we trust it.
+		Otherwise we only return `self.organization` when a CRM Organization
+		with that exact name already exists — otherwise we return None so the
+		downstream link validation doesn't fail. The human-readable company
+		name is preserved on `CRM Deal.organization_name` (Data field) via the
+		normal field-copy loop in `create_deal`.
+		"""
+		if existing_organization:
+			return existing_organization
+		if self.organization and frappe.db.exists("CRM Organization", self.organization):
+			return self.organization
+		return None
 
 	def update_lead_contact(self, contact):
 		contact = frappe.get_cached_doc("Contact", contact)
@@ -306,7 +319,10 @@ class CRMLead(Document):
 
 			if hasattr(new_deal, fieldname):
 				if fieldname == "organization":
-					new_deal.update({fieldname: organization})
+					# Only link to a real CRM Organization; otherwise leave blank
+					# so _validate_links() doesn't raise on insert.
+					if organization and frappe.db.exists("CRM Organization", organization):
+						new_deal.update({fieldname: organization})
 				else:
 					new_deal.update({fieldname: self.get(field.fieldname)})
 
