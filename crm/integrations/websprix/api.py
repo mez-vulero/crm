@@ -239,20 +239,39 @@ def _require_queue_config(user: str) -> tuple[str, str]:
 	return agent["websprix_number"], agent["websprix_queue_id"]
 
 
+def _queue_membership_request(action: str) -> tuple:
+	"""Fire a /member/{customer_id}/{action} request for the current user.
+
+	WebSprix's legacy `/queue/join/{org}/{queue_num}/{ext}` path endpoint
+	returns 404 on current tenants — the actively maintained endpoint is
+	`POST /member/{customer_id}/{add|remove}` with the full composite queue
+	id in the JSON body. Returns (response, interface, queue_name).
+	"""
+	agent, interface = _get_user_queue_interface()
+	if not agent:
+		frappe.throw(
+			_("Your WebSprix Queue ID or extension is missing from the Telephony Agent profile."),
+			title=_("WebSprix Not Configured"),
+		)
+
+	settings = _get_settings()
+	url = f"{_get_base_url()}/member/{settings.customer_id}/{action}"
+	body = {
+		"queue_name": agent.websprix_queue_id,
+		"interface": interface,
+	}
+	response = requests.post(url, json=body, headers=_get_headers(), timeout=10)
+	return response, interface, agent.websprix_queue_id
+
+
 @frappe.whitelist()
 def join_queue() -> dict:
 	"""Join the WebSprix queue configured for the current user."""
 	user = frappe.session.user
-	extension, queue_id = _require_queue_config(user)
-
-	settings = _get_settings()
-	# The path-based queue endpoints expect just the numeric prefix
-	# (e.g. "162"), not the full composite id ("162Qcustomer_service").
-	queue_path_id = _numeric_queue_id(queue_id)
-	url = f"{_get_base_url()}/queue/join/{settings.organization_id}/{queue_path_id}/{extension}"
+	_require_queue_config(user)
 
 	try:
-		response = requests.post(url, headers=_get_headers(), timeout=10)
+		response, interface, queue_id = _queue_membership_request("add")
 		response.raise_for_status()
 	except requests.exceptions.Timeout:
 		frappe.throw(
@@ -285,14 +304,10 @@ def join_queue() -> dict:
 def leave_queue() -> dict:
 	"""Leave the WebSprix queue configured for the current user."""
 	user = frappe.session.user
-	extension, queue_id = _require_queue_config(user)
-
-	settings = _get_settings()
-	queue_path_id = _numeric_queue_id(queue_id)
-	url = f"{_get_base_url()}/queue/leave/{settings.organization_id}/{queue_path_id}/{extension}"
+	_require_queue_config(user)
 
 	try:
-		response = requests.post(url, headers=_get_headers(), timeout=10)
+		response, interface, queue_id = _queue_membership_request("remove")
 		response.raise_for_status()
 	except requests.exceptions.Timeout:
 		frappe.throw(
@@ -571,24 +586,43 @@ def fetch_and_process_outgoing_call_logs(
 	settings = _get_settings()
 	from_date, to_date = _date_range(from_date, to_date)
 	agent_param = "null" if all_agents else agent_row.websprix_number
+	base = _get_base_url()
 
-	url = (
-		f"{_get_base_url()}/cust_rep/outgoing_report/{settings.organization_id}"
-		f"?from={from_date}&to={to_date}&agent={agent_param}"
-	)
-
-	try:
-		response = requests.get(url, headers=_get_headers(), timeout=30)
-	except requests.exceptions.RequestException as e:
-		frappe.log_error(str(e), "WebSprix fetch_and_process_outgoing_call_logs (request)")
-		return {"status": "error", "message": "API request failed", "details": str(e)}
-
-	if response.status_code not in [200, 201]:
-		frappe.log_error(
-			f"Failed to fetch outgoing calls: {response.status_code} - {response.text[:500]}",
-			"WebSprix fetch_and_process_outgoing_call_logs",
+	# Try the new `cust_rep/outgoing_report` endpoint first; if the tenant
+	# doesn't support it (404), fall back to the legacy per-extension path.
+	candidate_urls = [
+		f"{base}/cust_rep/outgoing_report/{settings.organization_id}"
+		f"?from={from_date}&to={to_date}&agent={agent_param}",
+	]
+	if not all_agents and agent_row and agent_row.websprix_number:
+		candidate_urls.append(
+			f"{base}/cust_ext/{settings.organization_id}/call_logs/{agent_row.websprix_number}?dir=out"
 		)
-		return {"status": "error", "message": "Failed to fetch calls", "details": response.text[:500]}
+
+	response = None
+	last_error_detail = ""
+	for url in candidate_urls:
+		try:
+			response = requests.get(url, headers=_get_headers(), timeout=30)
+		except requests.exceptions.RequestException as e:
+			last_error_detail = f"{url}\n{e}"
+			frappe.log_error(last_error_detail, "WebSprix fetch outgoing (request)")
+			response = None
+			continue
+
+		if response.status_code in [200, 201]:
+			break
+
+		last_error_detail = f"{url}\n{response.status_code}: {response.text[:500]}"
+		frappe.log_error(last_error_detail, "WebSprix fetch outgoing (http)")
+		response = None
+
+	if response is None:
+		return {
+			"status": "error",
+			"message": "All WebSprix outgoing-report endpoints failed",
+			"details": last_error_detail[:500],
+		}
 
 	try:
 		payload = response.json() or {}

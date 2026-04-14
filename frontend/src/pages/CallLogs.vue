@@ -100,15 +100,27 @@ async function syncWebsprixCallLogs() {
     const res = await call(
       'crm.integrations.websprix.api.fetch_all_call_logs',
     )
-    const failed = ['incoming', 'outgoing', 'missed'].filter(
-      (k) => res?.[k]?.status === 'error',
+    const failures = ['incoming', 'outgoing', 'missed']
+      .filter((k) => res?.[k]?.status === 'error')
+      .map((k) => {
+        const detail =
+          res[k]?.details || res[k]?.message || __('unknown error')
+        return `${k}: ${detail}`
+      })
+    const successes = ['incoming', 'outgoing', 'missed'].filter(
+      (k) => res?.[k]?.status === 'success',
     )
-    if (failed.length) {
+
+    if (failures.length) {
       toast.error(
-        __('Sync completed with errors: {0}', [failed.join(', ')]),
+        __('Sync errors — {0}', [failures.join(' | ')]),
+        { duration: 8000 },
       )
-    } else {
-      toast.success(__('Call logs synced from WebSprix'))
+    }
+    if (successes.length) {
+      toast.success(
+        __('Synced: {0}', [successes.join(', ')]),
+      )
     }
     callLogs.value?.reload?.()
   } catch (e) {
