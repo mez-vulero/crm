@@ -11,6 +11,24 @@ from crm.integrations.api import get_contact_by_phone_number
 
 QUEUE_CACHE_KEY = "websprix_queue_status"
 
+# Default lookback window for the PBX report endpoints. The vendor's report
+# API requires explicit `from`/`to` query params; if a caller doesn't supply
+# them we fall back to the last N days.
+DEFAULT_LOOKBACK_DAYS = 7
+MAX_PER_PAGE = 10000
+
+
+def _date_range(from_date: str | None = None, to_date: str | None = None) -> tuple[str, str]:
+	"""Return (from_date, to_date) as YYYY-MM-DD strings, defaulting to a recent window."""
+	from datetime import date, timedelta
+
+	today = date.today()
+	if not to_date:
+		to_date = today.isoformat()
+	if not from_date:
+		from_date = (today - timedelta(days=DEFAULT_LOOKBACK_DAYS)).isoformat()
+	return from_date, to_date
+
 
 @frappe.whitelist()
 def fetch_all_call_logs() -> dict:
@@ -510,20 +528,35 @@ def _create_incoming_call_log(log, user_link=None, off_hour=False):
 
 
 @frappe.whitelist()
-def fetch_and_process_outgoing_call_logs() -> dict:
-	"""Fetch outgoing call logs from WebSprix and sync into CRM Call Log."""
+def fetch_and_process_outgoing_call_logs(
+	from_date: str | None = None,
+	to_date: str | None = None,
+	all_agents: bool = False,
+) -> dict:
+	"""Fetch outgoing call logs from WebSprix's `cust_rep/outgoing_report` endpoint.
+
+	The PBX exposes outgoing CDR via `/api/v2/cust_rep/outgoing_report/{org_id}`
+	with `from`, `to`, and `agent` query params. `agent` can be the user's
+	extension or `null` for org-wide.
+	"""
 	user = frappe.session.user
-	agent = frappe.db.get_value(
+	agent_row = frappe.db.get_value(
 		"CRM Telephony Agent",
 		{"user": user},
 		["websprix_number"],
 		as_dict=True,
 	)
-	if not agent or not agent.websprix_number:
+	if not all_agents and (not agent_row or not agent_row.websprix_number):
 		return {"status": "error", "message": "Settings not found for the current user"}
 
 	settings = _get_settings()
-	url = f"{_get_base_url()}/cust_ext/{settings.organization_id}/call_logs/{agent.websprix_number}?dir=out"
+	from_date, to_date = _date_range(from_date, to_date)
+	agent_param = "null" if all_agents else agent_row.websprix_number
+
+	url = (
+		f"{_get_base_url()}/cust_rep/outgoing_report/{settings.organization_id}"
+		f"?from={from_date}&to={to_date}&agent={agent_param}"
+	)
 
 	try:
 		response = requests.get(url, headers=_get_headers(), timeout=30)
@@ -539,7 +572,7 @@ def fetch_and_process_outgoing_call_logs() -> dict:
 		return {"status": "error", "message": "Failed to fetch calls", "details": response.text[:500]}
 
 	try:
-		call_logs = response.json() or {}
+		payload = response.json() or {}
 	except ValueError as e:
 		frappe.log_error(
 			f"Non-JSON response: {response.text[:500]}",
@@ -547,28 +580,42 @@ def fetch_and_process_outgoing_call_logs() -> dict:
 		)
 		return {"status": "error", "message": "Invalid response from PBX", "details": str(e)}
 
+	# `outgoing_report` may return either a top-level list, {"result": [...]},
+	# or {"data": [...]}. Be defensive about the shape.
+	if isinstance(payload, list):
+		rows = payload
+	else:
+		rows = payload.get("result") or payload.get("data") or []
+
 	inserted = 0
 	skipped = 0
-	for log in call_logs.get("result") or []:
+	for row in rows:
 		try:
-			call_id = log.get("id")
+			call_id = (
+				row.get("id")
+				or row.get("uniqueid")
+				or row.get("call_id")
+				or row.get("uuid")
+			)
 			if not call_id or frappe.db.exists("CRM Call Log", call_id):
 				skipped += 1
 				continue
 
-			from_number = log.get("src") or ""
-			to_number = format_phone_number(log.get("dst") or "") or log.get("dst") or ""
+			from_number = row.get("src") or row.get("caller") or row.get("from") or ""
+			to_number = (
+				format_phone_number(row.get("dst") or row.get("callee") or row.get("to") or "")
+				or row.get("dst")
+				or row.get("callee")
+				or row.get("to")
+				or ""
+			)
 			if not from_number or not to_number:
-				# CRM Call Log requires from/to — skip rather than 500
 				skipped += 1
 				continue
 
-			start_date = None
-			if log.get("created_at"):
-				try:
-					start_date = parse(log["created_at"]).replace(tzinfo=None)
-				except (ValueError, TypeError):
-					start_date = None
+			start_date = _parse_pbx_datetime(
+				row.get("created_at") or row.get("calldate") or row.get("start_time")
+			)
 
 			new_call_log = {
 				"doctype": "CRM Call Log",
@@ -577,18 +624,22 @@ def fetch_and_process_outgoing_call_logs() -> dict:
 				"id": call_id,
 				"from": from_number,
 				"to": to_number,
-				"caller": user,
-				"duration": int(log.get("duration") or 0),
-				"status": _map_log_status(log.get("disposition")),
-				"recording_url": log.get("recording_url") or "",
+				"caller": _resolve_agent_user(row.get("agent") or row.get("extension")) or user,
+				"duration": int(row.get("duration") or row.get("billsec") or 0),
+				"status": _map_log_status(row.get("disposition") or row.get("status")),
+				"recording_url": (
+					row.get("recording_url")
+					or row.get("recording")
+					or row.get("recordingfile")
+					or ""
+				),
 				"start_time": start_date,
 			}
 			frappe.get_doc(new_call_log).insert(ignore_permissions=True)
 			inserted += 1
 		except Exception as e:
-			# One bad row must not abort the whole batch.
 			frappe.log_error(
-				f"row={log}\nerror={e}",
+				f"row={row}\nerror={e}",
 				"WebSprix outgoing call log insert",
 			)
 			skipped += 1
@@ -603,8 +654,15 @@ def fetch_and_process_outgoing_call_logs() -> dict:
 
 
 @frappe.whitelist()
-def fetch_and_process_missed_call_logs() -> dict:
-	"""Fetch missed call (no-answer) logs when no agent was available."""
+def fetch_and_process_missed_call_logs(
+	from_date: str | None = None,
+	to_date: str | None = None,
+) -> dict:
+	"""Fetch missed call (no-answer) logs from WebSprix.
+
+	The vendor's `new-report/{org}/{queue}/noanswer` endpoint requires `from`
+	and `to` date params (YYYY-MM-DD) — without them the response is empty.
+	"""
 	user = frappe.session.user
 	agent = frappe.db.get_value(
 		"CRM Telephony Agent",
@@ -615,9 +673,14 @@ def fetch_and_process_missed_call_logs() -> dict:
 	if not agent or not agent.websprix_queue_id:
 		return {"status": "error", "message": "Settings not found for the current user"}
 
+	# The PBX queue path uses the bare numeric queue id (the part before "Q...")
 	queue_name = (agent.websprix_queue_id or "").split("Q", 1)[0]
 	settings = _get_settings()
-	url = f"{_get_base_url()}/new-report/{settings.organization_id}/{queue_name}/noanswer?page=1&per_page=50"
+	from_date, to_date = _date_range(from_date, to_date)
+	url = (
+		f"{_get_base_url()}/new-report/{settings.organization_id}/{queue_name}/noanswer"
+		f"?page=1&per_page={MAX_PER_PAGE}&from={from_date}&to={to_date}&cphone=null"
+	)
 
 	try:
 		response = requests.get(url, headers=_get_headers(), timeout=30)
@@ -707,6 +770,34 @@ def sort_logs_by_date(logs):
 		return sorted(logs, key=lambda log: parse(log["created_at"]))
 	except Exception:
 		return logs
+
+
+def _parse_pbx_datetime(value):
+	"""Best-effort parse of various WebSprix date formats. Returns naive datetime or None."""
+	if not value:
+		return None
+	try:
+		return parse(value).replace(tzinfo=None)
+	except (ValueError, TypeError):
+		return None
+
+
+def _resolve_agent_user(extension):
+	"""Map a WebSprix extension to a Frappe User via CRM Telephony Agent."""
+	if not extension:
+		return None
+	# Some payloads encode it as `{customer_id}S{extension}`
+	if isinstance(extension, str) and "S" in extension:
+		try:
+			extension = extension.split("S", 1)[1]
+		except IndexError:
+			pass
+	user = frappe.db.get_value(
+		"CRM Telephony Agent",
+		{"websprix_number": str(extension)},
+		"user",
+	)
+	return user
 
 
 def _map_log_status(disposition: str) -> str:

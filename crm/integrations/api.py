@@ -9,17 +9,24 @@ from crm.utils import are_same_phone_number, parse_phone_number
 
 
 def _get_recording_credentials(telephony_medium: str) -> tuple:
-	"""Return (api_key, secret) for the given telephony medium."""
+	"""Return (auth_kind, secret) for the given telephony medium.
+
+	`auth_kind` is one of:
+	  - "basic"  → use HTTP Basic auth with (api_key, secret)
+	  - "token"  → append `?token=<secret>` to the URL when fetching
+	  - None     → no authentication required
+	"""
 	if telephony_medium == "Twilio":
 		s = frappe.get_single("CRM Twilio Settings")
-		return s.api_key, s.get_password("api_secret")
+		return ("basic", s.api_key, s.get_password("api_secret"))
 	elif telephony_medium == "Exotel":
 		s = frappe.get_single("CRM Exotel Settings")
-		return s.api_key, s.get_password("api_token")
+		return ("basic", s.api_key, s.get_password("api_token"))
 	elif telephony_medium == "WebSprix":
-		# WebSprix recording URLs are served publicly (protected by opaque tokens
-		# in the URL itself). Fall through to an unauthenticated GET.
-		return None, None
+		# WebSprix recording URLs accept the API key as a query-string token,
+		# e.g. .../media/queue_recordings/.../*.m4a?token=<api_key>
+		s = frappe.get_single("CRM WebSprix Settings")
+		return ("token", s.api_key)
 	frappe.throw(_("Unknown telephony medium: {0}").format(telephony_medium))
 
 
@@ -165,16 +172,35 @@ def get_recording_url(call_log_name: str):
 	if not log.recording_url:
 		frappe.throw(_("Recording URL not found"), frappe.DoesNotExistError)
 
-	auth = _get_recording_credentials(log.telephony_medium)
+	creds = _get_recording_credentials(log.telephony_medium)
+	auth_kind = creds[0] if creds else None
 	request_kwargs = {"stream": True, "timeout": 10}
-	# Only attach auth if the provider actually requires it (WebSprix doesn't)
-	if auth and auth[0] is not None:
-		request_kwargs["auth"] = auth
-	with requests.get(log.recording_url, **request_kwargs) as r:
+	url = log.recording_url
+
+	if auth_kind == "basic":
+		# (kind, api_key, secret) → use HTTP Basic auth
+		request_kwargs["auth"] = (creds[1], creds[2])
+	elif auth_kind == "token":
+		# (kind, token) → append `?token=<token>` to the URL
+		token = creds[1]
+		separator = "&" if "?" in url else "?"
+		url = f"{url}{separator}token={token}"
+
+	# Pick a sensible mime type from the URL extension; default to mpeg.
+	mimetype = "audio/mpeg"
+	lower_url = url.lower().split("?", 1)[0]
+	if lower_url.endswith(".m4a"):
+		mimetype = "audio/mp4"
+	elif lower_url.endswith(".wav"):
+		mimetype = "audio/wav"
+	elif lower_url.endswith(".ogg"):
+		mimetype = "audio/ogg"
+
+	with requests.get(url, **request_kwargs) as r:
 		r.raise_for_status()
 		response = Response()
 		response.data = r.content
-		response.mimetype = "audio/mpeg"
+		response.mimetype = mimetype
 	return response
 
 
