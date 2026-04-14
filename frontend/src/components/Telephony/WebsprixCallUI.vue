@@ -741,7 +741,7 @@ async function makeOutgoingCall(number, sipServer) {
         callStatus.value = ''
         muted.value = false
         counterUp.value.stop()
-        //refreshCallLogs('outgoing');
+        refreshCallLogs('outgoing')
         break
       default:
         console.log('Unknown session state')
@@ -958,10 +958,19 @@ async function updateTask(_task, insert_mode = false) {
 }
 
 async function refreshCallLogs(type) {
-  if (type == 'incoming') {
-    await call('crm.integrations.websprix.api.fetch_and_process_call_logs');
-  } else if (type == 'outgoing') {
-    await call('crm.integrations.websprix.api.fetch_and_process_outgoing_call_logs');
+  // The PBX needs a few seconds to flush the call into its REST log endpoint,
+  // so wait briefly before fetching. The cron also pulls every 5 minutes as
+  // a backstop in case this fire-and-forget sync misses.
+  await new Promise((resolve) => setTimeout(resolve, 4000))
+  try {
+    if (type === 'incoming') {
+      await call('crm.integrations.websprix.api.fetch_and_process_incoming_call_logs')
+      await call('crm.integrations.websprix.api.fetch_and_process_missed_call_logs')
+    } else if (type === 'outgoing') {
+      await call('crm.integrations.websprix.api.fetch_and_process_outgoing_call_logs')
+    }
+  } catch (e) {
+    console.warn('[WebSprix] Post-call log sync failed:', e)
   }
 }
 

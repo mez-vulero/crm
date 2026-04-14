@@ -12,6 +12,65 @@ from crm.integrations.api import get_contact_by_phone_number
 QUEUE_CACHE_KEY = "websprix_queue_status"
 
 
+@frappe.whitelist()
+def fetch_all_call_logs() -> dict:
+	"""Run incoming + outgoing + missed call-log sync for the current user.
+
+	Used by the manual "Sync Call Logs" button in the Call Logs page.
+	Returns a per-direction summary so the UI can show what happened.
+	"""
+	if not frappe.has_permission("CRM Call Log", "create"):
+		frappe.throw(_("Not permitted"), frappe.PermissionError)
+
+	results = {
+		"incoming": _safe_run(fetch_and_process_incoming_call_logs),
+		"outgoing": _safe_run(fetch_and_process_outgoing_call_logs),
+		"missed": _safe_run(fetch_and_process_missed_call_logs),
+	}
+	return results
+
+
+def _safe_run(fn):
+	"""Invoke a fetch function, capture exceptions, return a status dict."""
+	try:
+		return fn() or {"status": "success"}
+	except Exception as e:
+		frappe.log_error(str(e), f"WebSprix {fn.__name__}")
+		return {"status": "error", "message": str(e)}
+
+
+def sync_call_logs_for_all_agents():
+	"""Scheduler entry point: pull call logs from WebSprix for every enabled agent.
+
+	Iterates over CRM Telephony Agent rows where the WebSprix flag is on, and
+	runs the three fetchers under each agent's user context so the existing
+	per-user queries (which key off `frappe.session.user`) work unchanged.
+	Skips silently when WebSprix integration is disabled.
+	"""
+	if not frappe.db.get_single_value("CRM WebSprix Settings", "enabled"):
+		return
+
+	agents = frappe.get_all(
+		"CRM Telephony Agent",
+		filters={"websprix": 1},
+		fields=["user", "websprix_number"],
+	)
+
+	original_user = frappe.session.user
+	for agent in agents:
+		if not agent.websprix_number:
+			continue
+		try:
+			frappe.set_user(agent.user)
+			_safe_run(fetch_and_process_incoming_call_logs)
+			_safe_run(fetch_and_process_outgoing_call_logs)
+			_safe_run(fetch_and_process_missed_call_logs)
+		except Exception:
+			frappe.log_error(frappe.get_traceback(), f"WebSprix sync_call_logs_for_all_agents [{agent.user}]")
+		finally:
+			frappe.set_user(original_user)
+
+
 def _get_settings():
 	"""Return the CRM WebSprix Settings single document."""
 	return frappe.get_single("CRM WebSprix Settings")
