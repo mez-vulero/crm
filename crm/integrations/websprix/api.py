@@ -567,7 +567,10 @@ def get_queue_status() -> dict:
 
 
 @frappe.whitelist()
-def fetch_and_process_incoming_call_logs() -> dict:
+def fetch_and_process_incoming_call_logs(
+	from_date: str | None = None,
+	to_date: str | None = None,
+) -> dict:
 	"""Fetch incoming call logs from WebSprix and sync into CRM Call Log."""
 	user = frappe.session.user
 	agent = frappe.db.get_value(
@@ -580,7 +583,15 @@ def fetch_and_process_incoming_call_logs() -> dict:
 		return {"status": "error", "message": "Settings not found for the current user"}
 
 	settings = _get_settings()
-	url = f"{_get_base_url()}/cust_ext/{settings.organization_id}/call_logs/{agent.websprix_number}?dir=in"
+	from_date, to_date = _date_range(from_date, to_date)
+
+	# Ask for a full page with the date window — without `per_page` the PBX
+	# returns a small default (≈5-10 rows), which is why prior syncs only
+	# pulled a handful of entries.
+	url = (
+		f"{_get_base_url()}/cust_ext/{settings.organization_id}/call_logs/{agent.websprix_number}"
+		f"?dir=in&page=1&per_page={MAX_PER_PAGE}&from={from_date}&to={to_date}"
+	)
 
 	try:
 		response = requests.get(url, headers=_get_headers(), timeout=30)
@@ -604,12 +615,22 @@ def fetch_and_process_incoming_call_logs() -> dict:
 		)
 		return {"status": "error", "message": "Invalid response from PBX", "details": str(e)}
 
-	sorted_logs = sort_logs_by_date(call_logs.get("result") or [])
+	rows = call_logs.get("result") or []
+	sorted_logs = sort_logs_by_date(rows)
+	inserted = 0
 	for log in sorted_logs:
+		before = frappe.db.exists("CRM Call Log", log.get("id"))
 		_create_incoming_call_log(log=log, user_link=user)
+		if not before and frappe.db.exists("CRM Call Log", log.get("id")):
+			inserted += 1
 
 	frappe.db.commit()
-	return {"status": "success", "message": "Call logs processed successfully"}
+	return {
+		"status": "success",
+		"message": f"Incoming logs processed: {inserted} inserted from {len(rows)} PBX rows",
+		"inserted": inserted,
+		"fetched": len(rows),
+	}
 
 
 def _create_incoming_call_log(log, user_link=None, off_hour=False):
@@ -689,16 +710,24 @@ def fetch_and_process_outgoing_call_logs(
 	agent_param = "null" if all_agents else agent_row.websprix_number
 	base = _get_base_url()
 
-	# Try the new `cust_rep/outgoing_report` endpoint first; if the tenant
-	# doesn't support it (404), fall back to the legacy per-extension path.
+	# The vendor's outgoing-report endpoints accept either the tenant's
+	# organization_id or customer_id depending on how the account was
+	# provisioned. We probe both before falling back to the legacy per-
+	# extension path on cust_ext. The first URL that returns 2xx wins.
+	ext = agent_row.websprix_number if agent_row else None
 	candidate_urls = [
 		f"{base}/cust_rep/outgoing_report/{settings.organization_id}"
 		f"?from={from_date}&to={to_date}&agent={agent_param}",
+		f"{base}/cust_rep/outgoing_report/{settings.customer_id}"
+		f"?from={from_date}&to={to_date}&agent={agent_param}",
 	]
-	if not all_agents and agent_row and agent_row.websprix_number:
-		candidate_urls.append(
-			f"{base}/cust_ext/{settings.organization_id}/call_logs/{agent_row.websprix_number}?dir=out"
-		)
+	if not all_agents and ext:
+		candidate_urls.extend([
+			f"{base}/cust_ext/{settings.organization_id}/call_logs/{ext}"
+			f"?dir=out&page=1&per_page={MAX_PER_PAGE}&from={from_date}&to={to_date}",
+			f"{base}/cust_ext/{settings.customer_id}/call_logs/{ext}"
+			f"?dir=out&page=1&per_page={MAX_PER_PAGE}&from={from_date}&to={to_date}",
+		])
 
 	response = None
 	last_error_detail = ""
@@ -739,37 +768,73 @@ def fetch_and_process_outgoing_call_logs(
 	if isinstance(payload, list):
 		rows = payload
 	else:
-		rows = payload.get("result") or payload.get("data") or []
+		rows = (
+			payload.get("result")
+			or payload.get("data")
+			or payload.get("records")
+			or payload.get("items")
+			or []
+		)
+
+	# First-row payload sample — logged so we can diagnose field-name
+	# mismatches without needing server shell access. Only fires on sync,
+	# so it's at most one error-log entry per manual/cron run.
+	if rows:
+		try:
+			sample = rows[0] if isinstance(rows[0], dict) else {"_value": rows[0]}
+			frappe.log_error(
+				f"first row keys: {sorted(sample.keys()) if isinstance(sample, dict) else 'not-a-dict'}\n"
+				f"first row: {sample}",
+				"WebSprix outgoing payload sample",
+			)
+		except Exception:
+			pass
+	else:
+		frappe.log_error(
+			f"Empty row list.\npayload type: {type(payload).__name__}\n"
+			f"top-level keys: {list(payload.keys()) if isinstance(payload, dict) else 'n/a'}\n"
+			f"payload[:500]: {str(payload)[:500]}",
+			"WebSprix outgoing empty response",
+		)
 
 	inserted = 0
 	skipped = 0
 	for row in rows:
 		try:
-			call_id = (
-				row.get("id")
-				or row.get("uniqueid")
-				or row.get("call_id")
-				or row.get("uuid")
-			)
-			if not call_id or frappe.db.exists("CRM Call Log", call_id):
-				skipped += 1
-				continue
-
 			from_number = row.get("src") or row.get("caller") or row.get("from") or ""
-			to_number = (
-				format_phone_number(row.get("dst") or row.get("callee") or row.get("to") or "")
-				or row.get("dst")
-				or row.get("callee")
-				or row.get("to")
-				or ""
+			to_number_raw = (
+				row.get("dst") or row.get("callee") or row.get("to") or row.get("number") or ""
 			)
+			to_number = format_phone_number(to_number_raw) or to_number_raw
+
 			if not from_number or not to_number:
 				skipped += 1
 				continue
 
 			start_date = _parse_pbx_datetime(
-				row.get("created_at") or row.get("calldate") or row.get("start_time")
+				row.get("created_at")
+				or row.get("calldate")
+				or row.get("start_time")
+				or row.get("ctime")
+				or row.get("datetime")
 			)
+
+			call_id = (
+				row.get("id")
+				or row.get("uniqueid")
+				or row.get("call_id")
+				or row.get("uuid")
+				or row.get("unique_id")
+			)
+			if not call_id:
+				# Synthesize a deterministic id so a re-run of the same row
+				# doesn't double-insert. Key = from|to|start_time.
+				key = f"wsout-{from_number}-{to_number}-{start_date or row.get('duration') or ''}"
+				call_id = hashlib.sha256(key.encode()).hexdigest()[:20]
+
+			if frappe.db.exists("CRM Call Log", call_id):
+				skipped += 1
+				continue
 
 			new_call_log = {
 				"doctype": "CRM Call Log",
@@ -785,6 +850,7 @@ def fetch_and_process_outgoing_call_logs(
 					row.get("recording_url")
 					or row.get("recording")
 					or row.get("recordingfile")
+					or row.get("recording_path")
 					or ""
 				),
 				"start_time": start_date,
