@@ -4,8 +4,23 @@
     <div ref="callPopup"
       class="fixed z-20 flex w-60 cursor-move select-none flex-col rounded-lg bg-gray-900 p-4 text-gray-300 shadow-2xl"
       :style="style">
-      <div class="flex flex-row-reverse items-center gap-1">
+      <div class="flex flex-row-reverse items-center gap-2">
         <MinimizeIcon class="h-4 w-4 cursor-pointer" @click="toggleCallWindow" />
+        <button
+          v-if="contact.docname && contact.doctype"
+          type="button"
+          class="inline-flex h-5 w-5 items-center justify-center rounded-full text-gray-300 hover:text-white hover:bg-gray-800 focus:outline-none"
+          :title="
+            contact.doctype === 'CRM Deal'
+              ? __('Open deal')
+              : contact.doctype === 'CRM Lead'
+                ? __('Open lead')
+                : __('Open contact')
+          "
+          @click="goToContact"
+        >
+          <LucideInfo class="h-4 w-4" />
+        </button>
       </div>
       <div class="flex flex-col items-center justify-center gap-3">
         <Avatar :image="contact.image" :label="contact.full_name"
@@ -35,39 +50,27 @@
           }}
         </div>
         <div v-if="onCall" class="flex gap-2">
-          <Button :icon="muted ? 'mic-off' : 'mic'" class="rounded-full" @click="toggleMute" />
-          <Button @click="togglePopover" class="rounded-full">
+          <Button :icon="muted ? 'mic-off' : 'mic'" class="rounded-full" :tooltip="__('Mute / Unmute')" @click="toggleMute" />
+          <Button class="rounded-full" :tooltip="__('Transfer call')" @click="togglePopover">
             <template #icon>
               <ReplyIcon class="cursor-pointer rounded-full" />
             </template>
           </Button>
-          <Button class="rounded-full">
-            <template #icon>
-              <div v-if="contact.first_name && contact.first_name !== 'Unknown'">
-                <FileIcon class="h-4 w-4 cursor-pointer rounded-full text-gray-900" @click="goToContact()" />
-              </div>
-              <div v-else>
-                <ContactIcon class="h-4 w-4 cursor-pointer rounded-full text-gray-900" @click="goToContact()" />
-              </div>
-            </template>
-          </Button>
-                   <Button
-            class="bg-surface-gray-6 text-ink-white hover:bg-surface-gray-5"
+          <Button
+            class="rounded-full bg-surface-gray-6 text-ink-white hover:bg-surface-gray-5"
             :tooltip="__('Add a note')"
-            size="md"
             :icon="NoteIcon"
-            @click="showNoteWindow"
+            @click="openNoteModal"
           />
           <Button
-            class="bg-surface-gray-6 text-ink-white hover:bg-surface-gray-5"
-            size="md"
+            class="rounded-full bg-surface-gray-6 text-ink-white hover:bg-surface-gray-5"
             :tooltip="__('Add a task')"
             :icon="TaskIcon"
-            @click="showTaskWindow"
+            @click="openTaskModal"
           />
-          <Button class="rounded-full bg-red-600 hover:bg-red-700">
+          <Button class="rounded-full bg-red-600 hover:bg-red-700" :tooltip="__('Hang up')" @click="hangUpCall">
             <template #icon>
-              <PhoneIcon class="h-4 w-4 rotate-[135deg] fill-white text-white" @click="hangUpCall" />
+              <PhoneIcon class="h-4 w-4 rotate-[135deg] fill-white text-white" />
             </template>
           </Button>
         </div>
@@ -151,19 +154,32 @@
       </li>
     </ul>
   </div>
-  <NoteModal v-model="showNoteModal" :note="note" doctype="CRM Call Log" @after="updateNote" />
+  <NoteModal
+    v-model="showNoteModal"
+    :note="note"
+    doctype="CRM Call Log"
+    :doc="currentCallLogId"
+    @after="updateNote"
+  />
+  <TaskModal
+    v-model="showTaskModal"
+    :task="task"
+    doctype="CRM Call Log"
+    :doc="currentCallLogId"
+    @after="updateTask"
+  />
 </template>
 
 <script setup>
 import NoteIcon from '@/components/Icons/NoteIcon.vue'
-import FileIcon from '@/components/Icons/FileIcon.vue'
-import ContactIcon from '@/components/Icons/ContactIcon.vue'
+import TaskIcon from '@/components/Icons/TaskIcon.vue'
 import MinimizeIcon from '@/components/Icons/MinimizeIcon.vue'
-import DialpadIcon from '@/components/Icons/DialpadIcon.vue'
 import ReplyIcon from '@/components/Icons/ReplyIcon.vue'
 import PhoneIcon from '@/components/Icons/PhoneIcon.vue'
+import LucideInfo from '~icons/lucide/info'
 import CountUpTimer from '@/components/CountUpTimer.vue'
 import NoteModal from '@/components/Modals/NoteModal.vue'
+import TaskModal from '@/components/Modals/TaskModal.vue'
 import {
   Inviter,
   Registerer,
@@ -176,9 +192,9 @@ import router from '@/router'
 import { useDraggable, useWindowSize } from '@vueuse/core'
 import { globalStore } from '@/stores/global'
 import { Avatar, call, createResource } from 'frappe-ui'
-import { onMounted, ref, watch } from 'vue'
+import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
-const { setMakeCall, $dialog } = globalStore()
+const { setMakeCall, $dialog, $socket } = globalStore()
 
 let log = ref('Connecting...')
 
@@ -206,7 +222,18 @@ let callPopup = ref(null)
 let counterUp = ref(null)
 let callStatus = ref('')
 const showNoteModal = ref(false)
+const showTaskModal = ref(false)
+const currentCallLogId = ref('')
+const task = ref({
+  title: '',
+  description: '',
+  assigned_to: '',
+  due_date: '',
+  status: 'Backlog',
+  priority: 'Low',
+})
 const note = ref({
+  name: '',
   title: '',
   content: '',
 })
@@ -706,6 +733,7 @@ async function makeOutgoingCall(number, sipServer) {
           docname:   '',
           doctype:   ''
         }
+        currentCallLogId.value = ''
         onCall.value = false
         showCallPopup.value = false
         showSmallCallWindow = false
@@ -827,29 +855,106 @@ function audioConfig(inviter) {
 
 function goToContact() {
   if (!contact.value?.doctype || !contact.value?.docname) {
-    console.warn("No doc available to navigate")
+    console.warn('[WebSprix] No linked document to open for this contact')
     return
   }
 
-  let params = {}
-  // Set param key based on doctype
-  switch (contact.value.doctype) {
-    case "Contact":
-      params = { contactId: contact.value.docname }
-      break
-    case "Lead":
-      params = { leadId: contact.value.docname }
-      break
-    case "Deal":
-      params = { dealId: contact.value.docname }
-      break
+  // Backend `get_deal_lead_or_contact_from_number` returns the raw Frappe
+  // doctype name ("CRM Lead" / "CRM Deal" / "Contact"), but the router
+  // registers routes as "Lead" / "Deal" / "Contact". Translate accordingly.
+  const routeByDoctype = {
+    'CRM Lead': { name: 'Lead', paramKey: 'leadId' },
+    'CRM Deal': { name: 'Deal', paramKey: 'dealId' },
+    Lead: { name: 'Lead', paramKey: 'leadId' },
+    Deal: { name: 'Deal', paramKey: 'dealId' },
+    Contact: { name: 'Contact', paramKey: 'contactId' },
   }
-console.log(params)
+
+  const target = routeByDoctype[contact.value.doctype]
+  if (!target) {
+    console.warn('[WebSprix] Unknown doctype for navigation:', contact.value.doctype)
+    return
+  }
+
   router.push({
-    name: contact.value.doctype,
-    params,
-    //hash
+    name: target.name,
+    params: { [target.paramKey]: contact.value.docname },
   })
+}
+
+async function resolveCurrentCallLogId() {
+  // Prefer the id captured from the websprix_call realtime event
+  if (currentCallLogId.value) return currentCallLogId.value
+
+  // Fall back to the most recent WebSprix call log for this phone number
+  if (!phoneNumber.value) return ''
+  try {
+    const logs = await call('frappe.client.get_list', {
+      doctype: 'CRM Call Log',
+      filters: {
+        telephony_medium: 'WebSprix',
+        from: ['in', [phoneNumber.value, `+${phoneNumber.value}`]],
+      },
+      or_filters: { to: phoneNumber.value },
+      fields: ['name'],
+      order_by: 'creation desc',
+      page_length: 1,
+    })
+    if (logs?.length) {
+      currentCallLogId.value = logs[0].name
+      return currentCallLogId.value
+    }
+  } catch (e) {
+    console.warn('[WebSprix] Could not resolve current call log:', e)
+  }
+  return ''
+}
+
+async function openNoteModal() {
+  await resolveCurrentCallLogId()
+  note.value = { name: '', title: '', content: '' }
+  showNoteModal.value = true
+}
+
+async function openTaskModal() {
+  await resolveCurrentCallLogId()
+  task.value = {
+    title: '',
+    description: '',
+    assigned_to: '',
+    due_date: '',
+    status: 'Backlog',
+    priority: 'Low',
+  }
+  showTaskModal.value = true
+}
+
+async function updateNote(_note, insert_mode = false) {
+  note.value = _note
+  if (insert_mode && _note?.name && currentCallLogId.value) {
+    try {
+      await call('crm.integrations.api.add_note_to_call_log', {
+        call_sid: currentCallLogId.value,
+        note: _note,
+      })
+    } catch (e) {
+      console.warn('[WebSprix] Failed to link note to call log:', e)
+    }
+  }
+}
+
+async function updateTask(_task, insert_mode = false) {
+  task.value = _task
+  if (insert_mode && _task?.name && currentCallLogId.value) {
+    try {
+      await call('crm.integrations.api.add_task_to_call_log', {
+        call_sid: currentCallLogId.value,
+        task: _task,
+      })
+    } catch (e) {
+      console.warn('[WebSprix] Failed to link task to call log:', e)
+    }
+  }
 }
 
 async function refreshCallLogs(type) {
@@ -909,9 +1014,26 @@ async function setup() {
   window.addEventListener('callEvent', function (e) {
     makeOutgoingCall(e.detail.number, sipServer);
   })
+
+  // Capture the CRM Call Log id as soon as the backend webhook fires so
+  // the "Add a note" / "Add a task" buttons have a reference to link to.
+  if ($socket && typeof $socket.on === 'function') {
+    $socket.on('websprix_call', (data) => {
+      if (data?.CallUUID) {
+        currentCallLogId.value = data.CallUUID
+      }
+    })
+  }
+
   await getOrganizationUsers();
   ringTone = new Audio("/assets/vulero_dialer/frontend/ring.mp3")
 }
+
+onBeforeUnmount(() => {
+  if ($socket && typeof $socket.off === 'function') {
+    $socket.off('websprix_call')
+  }
+})
 
 defineExpose({ setup, makeOutgoingCall })
 </script>
