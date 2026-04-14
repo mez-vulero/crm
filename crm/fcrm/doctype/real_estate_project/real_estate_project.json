@@ -1,0 +1,199 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "hash",
+ "creation": "2026-03-28 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "details_tab",
+  "project_name",
+  "status",
+  "column_break_rep01",
+  "location",
+  "city",
+  "section_break_rep02",
+  "description",
+  "dates_section",
+  "launch_date",
+  "column_break_rep03",
+  "delivery_date",
+  "units_section",
+  "total_units",
+  "available_units",
+  "column_break_rep04",
+  "reserved_units",
+  "sold_units",
+  "image_section",
+  "image"
+ ],
+ "fields": [
+  {
+   "fieldname": "details_tab",
+   "fieldtype": "Tab Break",
+   "label": "Details"
+  },
+  {
+   "fieldname": "project_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Project Name",
+   "reqd": 1
+  },
+  {
+   "default": "Active",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Status",
+   "options": "Pre-Launch\nActive\nSold Out\nDelivered"
+  },
+  {
+   "fieldname": "column_break_rep01",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "location",
+   "fieldtype": "Data",
+   "label": "Location"
+  },
+  {
+   "fieldname": "city",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "City"
+  },
+  {
+   "fieldname": "section_break_rep02",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "description",
+   "fieldtype": "Text Editor",
+   "label": "Description"
+  },
+  {
+   "fieldname": "dates_section",
+   "fieldtype": "Section Break",
+   "label": "Dates"
+  },
+  {
+   "fieldname": "launch_date",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "label": "Launch Date"
+  },
+  {
+   "fieldname": "column_break_rep03",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "delivery_date",
+   "fieldtype": "Date",
+   "label": "Delivery Date"
+  },
+  {
+   "fieldname": "units_section",
+   "fieldtype": "Section Break",
+   "label": "Unit Summary"
+  },
+  {
+   "default": "0",
+   "fieldname": "total_units",
+   "fieldtype": "Int",
+   "in_list_view": 1,
+   "label": "Total Units",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "available_units",
+   "fieldtype": "Int",
+   "in_list_view": 1,
+   "label": "Available Units",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_rep04",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "0",
+   "fieldname": "reserved_units",
+   "fieldtype": "Int",
+   "in_list_view": 1,
+   "label": "Reserved Units",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "sold_units",
+   "fieldtype": "Int",
+   "in_list_view": 1,
+   "label": "Sold Units",
+   "read_only": 1
+  },
+  {
+   "fieldname": "image_section",
+   "fieldtype": "Section Break",
+   "label": "Image"
+  },
+  {
+   "fieldname": "image",
+   "fieldtype": "Attach Image",
+   "label": "Image"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-03-28 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "FCRM",
+ "name": "Real Estate Project",
+ "naming_rule": "Random",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Sales Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Sales User",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "show_title_field_in_link": 1,
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "project_name",
+ "track_changes": 1
+}
