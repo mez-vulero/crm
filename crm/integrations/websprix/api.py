@@ -267,10 +267,13 @@ def _require_queue_config(user: str) -> tuple[str, str]:
 def _queue_membership_request(action: str) -> tuple:
 	"""Fire a /member/{customer_id}/{action} request for the current user.
 
-	WebSprix's legacy `/queue/join/{org}/{queue_num}/{ext}` path endpoint
-	returns 404 on current tenants — the actively maintained endpoint is
-	`POST /member/{customer_id}/{add|remove}` with the full composite queue
-	id in the JSON body. Returns (response, interface, queue_name).
+	WebSprix's REST verb differs per action:
+	  - `add`    → POST   /member/{cust}/add     body={queue_name, interface}
+	  - `remove` → DELETE /member/{cust}/remove  body={queue_name, interface}
+
+	The legacy `/queue/join/{org}/{queue_num}/{ext}` path endpoint returns 404
+	on current tenants and is no longer used. Returns (response, interface,
+	queue_name).
 	"""
 	agent, interface = _get_user_queue_interface()
 	if not agent:
@@ -285,7 +288,11 @@ def _queue_membership_request(action: str) -> tuple:
 		"queue_name": agent.websprix_queue_id,
 		"interface": interface,
 	}
-	response = requests.post(url, json=body, headers=_get_headers(), timeout=10)
+
+	if action == "remove":
+		response = requests.delete(url, json=body, headers=_get_headers(), timeout=10)
+	else:
+		response = requests.post(url, json=body, headers=_get_headers(), timeout=10)
 	return response, interface, agent.websprix_queue_id
 
 
