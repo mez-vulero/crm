@@ -264,14 +264,63 @@ def _queue_membership_request(action: str) -> tuple:
 	return response, interface, agent.websprix_queue_id
 
 
+def _short_pbx_error(response) -> str:
+	"""Extract the most informative short message from a PBX error response."""
+	if response is None:
+		return ""
+	try:
+		payload = response.json()
+	except (ValueError, AttributeError):
+		return (getattr(response, "text", "") or "")[:300]
+
+	# Walk common error shapes used by WebSprix / FastAPI-style servers
+	for key in ("detail", "error", "message", "msg"):
+		val = payload.get(key) if isinstance(payload, dict) else None
+		if val:
+			if isinstance(val, list):
+				# FastAPI returns [{"loc": [...], "msg": "...", "type": "..."}]
+				return "; ".join(
+					f"{'.'.join(str(x) for x in item.get('loc', []))}: {item.get('msg', item)}"
+					if isinstance(item, dict)
+					else str(item)
+					for item in val
+				)[:300]
+			return str(val)[:300]
+	return (getattr(response, "text", "") or "")[:300]
+
+
+def _handle_queue_http_error(e, action_label: str, body: dict):
+	"""Log the full PBX response + request body, then throw a human-readable error."""
+	response = getattr(e, "response", None)
+	status = getattr(response, "status_code", "error")
+	pbx_msg = _short_pbx_error(response)
+	frappe.log_error(
+		f"{e}\nStatus: {status}\nRequest body: {body}\nResponse body: {getattr(response, 'text', '')}",
+		f"WebSprix {action_label}",
+	)
+	if pbx_msg:
+		frappe.throw(
+			_("WebSprix rejected the {0} request ({1}): {2}").format(
+				action_label, status, pbx_msg
+			),
+			title=_("Queue {0} Failed").format(action_label.title()),
+		)
+	frappe.throw(
+		_("WebSprix rejected the {0} request ({1}).").format(action_label, status),
+		title=_("Queue {0} Failed").format(action_label.title()),
+	)
+
+
 @frappe.whitelist()
 def join_queue() -> dict:
 	"""Join the WebSprix queue configured for the current user."""
 	user = frappe.session.user
 	_require_queue_config(user)
 
+	body = None
 	try:
 		response, interface, queue_id = _queue_membership_request("add")
+		body = {"queue_name": queue_id, "interface": interface}
 		response.raise_for_status()
 	except requests.exceptions.Timeout:
 		frappe.throw(
@@ -279,16 +328,7 @@ def join_queue() -> dict:
 			title=_("Queue Join Failed"),
 		)
 	except requests.exceptions.HTTPError as e:
-		frappe.log_error(
-			f"{e}\nStatus: {getattr(e.response, 'status_code', '?')}\nBody: {getattr(e.response, 'text', '')}",
-			"WebSprix join_queue",
-		)
-		frappe.throw(
-			_("WebSprix rejected the join request ({0}).").format(
-				getattr(e.response, "status_code", "error")
-			),
-			title=_("Queue Join Failed"),
-		)
+		_handle_queue_http_error(e, "join", body or {})
 	except requests.exceptions.RequestException as e:
 		frappe.log_error(str(e), "WebSprix join_queue")
 		frappe.throw(
@@ -306,8 +346,10 @@ def leave_queue() -> dict:
 	user = frappe.session.user
 	_require_queue_config(user)
 
+	body = None
 	try:
 		response, interface, queue_id = _queue_membership_request("remove")
+		body = {"queue_name": queue_id, "interface": interface}
 		response.raise_for_status()
 	except requests.exceptions.Timeout:
 		frappe.throw(
@@ -315,16 +357,7 @@ def leave_queue() -> dict:
 			title=_("Queue Leave Failed"),
 		)
 	except requests.exceptions.HTTPError as e:
-		frappe.log_error(
-			f"{e}\nStatus: {getattr(e.response, 'status_code', '?')}\nBody: {getattr(e.response, 'text', '')}",
-			"WebSprix leave_queue",
-		)
-		frappe.throw(
-			_("WebSprix rejected the leave request ({0}).").format(
-				getattr(e.response, "status_code", "error")
-			),
-			title=_("Queue Leave Failed"),
-		)
+		_handle_queue_http_error(e, "leave", body or {})
 	except requests.exceptions.RequestException as e:
 		frappe.log_error(str(e), "WebSprix leave_queue")
 		frappe.throw(
