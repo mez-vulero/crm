@@ -423,7 +423,7 @@ def fetch_and_process_incoming_call_logs() -> dict:
 		["websprix_number"],
 		as_dict=True,
 	)
-	if not agent:
+	if not agent or not agent.websprix_number:
 		return {"status": "error", "message": "Settings not found for the current user"}
 
 	settings = _get_settings()
@@ -431,46 +431,63 @@ def fetch_and_process_incoming_call_logs() -> dict:
 
 	try:
 		response = requests.get(url, headers=_get_headers(), timeout=30)
-		if response.status_code not in [200, 201]:
-			frappe.log_error(
-				f"Failed to fetch incoming calls: {response.status_code} - {response.text}",
-				"WebSprix fetch_and_process_incoming_call_logs",
-			)
-			return {"status": "error", "message": "Failed to fetch calls", "details": response.text}
-
-		call_logs = response.json() or {}
-		sorted_logs = sort_logs_by_date(call_logs.get("result", []))
-		for log in sorted_logs:
-			_create_incoming_call_log(log=log, user_link=user)
-
-		frappe.db.commit()
-		return {"status": "success", "message": "Call logs processed successfully"}
 	except requests.exceptions.RequestException as e:
-		frappe.log_error(str(e), "WebSprix fetch_and_process_incoming_call_logs")
+		frappe.log_error(str(e), "WebSprix fetch_and_process_incoming_call_logs (request)")
 		return {"status": "error", "message": "API request failed", "details": str(e)}
+
+	if response.status_code not in [200, 201]:
+		frappe.log_error(
+			f"Failed to fetch incoming calls: {response.status_code} - {response.text[:500]}",
+			"WebSprix fetch_and_process_incoming_call_logs",
+		)
+		return {"status": "error", "message": "Failed to fetch calls", "details": response.text[:500]}
+
+	try:
+		call_logs = response.json() or {}
+	except ValueError as e:
+		frappe.log_error(
+			f"Non-JSON response: {response.text[:500]}",
+			"WebSprix fetch_and_process_incoming_call_logs (json)",
+		)
+		return {"status": "error", "message": "Invalid response from PBX", "details": str(e)}
+
+	sorted_logs = sort_logs_by_date(call_logs.get("result") or [])
+	for log in sorted_logs:
+		_create_incoming_call_log(log=log, user_link=user)
+
+	frappe.db.commit()
+	return {"status": "success", "message": "Call logs processed successfully"}
 
 
 def _create_incoming_call_log(log, user_link=None, off_hour=False):
 	"""Insert a CRM Call Log for an incoming call from the WebSprix export."""
 	try:
-		if frappe.db.exists("CRM Call Log", log.get("id")):
+		call_id = log.get("id")
+		if call_id and frappe.db.exists("CRM Call Log", call_id):
 			return
 
 		if not off_hour:
+			from_number = format_phone_number(log.get("src") or "") or log.get("src") or ""
+			to_number = log.get("dst") or ""
+			if not from_number or not to_number or not call_id:
+				return
 			new_call_log = {
 				"doctype": "CRM Call Log",
 				"telephony_medium": "WebSprix",
 				"type": "Incoming",
-				"id": log["id"],
-				"from": format_phone_number(log["src"]),
-				"to": log["dst"],
+				"id": call_id,
+				"from": from_number,
+				"to": to_number,
 				"receiver": user_link,
-				"duration": log.get("duration") or 0,
+				"duration": int(log.get("duration") or 0),
 				"recording_url": log.get("recording_url") or "",
 				"status": _map_log_status(log.get("disposition")),
 				"start_time": log.get("created_at"),
 			}
 		else:
+			from_number = log.get("phone") or ""
+			if not from_number:
+				return
 			unique_id = str(uuid.uuid4())
 			short_id = hashlib.sha256(unique_id.encode()).hexdigest()[:10]
 			new_call_log = {
@@ -478,14 +495,18 @@ def _create_incoming_call_log(log, user_link=None, off_hour=False):
 				"telephony_medium": "WebSprix",
 				"id": short_id,
 				"type": "Incoming",
-				"from": log.get("phone"),
+				"from": from_number,
+				"to": user_link or "Queue",
 				"status": "No Answer",
 				"start_time": log.get("created_at"),
 			}
 
 		frappe.get_doc(new_call_log).insert(ignore_permissions=True)
 	except Exception as e:
-		frappe.log_error(str(e), "WebSprix _create_incoming_call_log")
+		frappe.log_error(
+			f"row={log}\nerror={e}",
+			"WebSprix _create_incoming_call_log",
+		)
 
 
 @frappe.whitelist()
@@ -498,7 +519,7 @@ def fetch_and_process_outgoing_call_logs() -> dict:
 		["websprix_number"],
 		as_dict=True,
 	)
-	if not agent:
+	if not agent or not agent.websprix_number:
 		return {"status": "error", "message": "Settings not found for the current user"}
 
 	settings = _get_settings()
@@ -506,17 +527,40 @@ def fetch_and_process_outgoing_call_logs() -> dict:
 
 	try:
 		response = requests.get(url, headers=_get_headers(), timeout=30)
-		if response.status_code not in [200, 201]:
-			frappe.log_error(
-				f"Failed to fetch outgoing calls: {response.status_code} - {response.text}",
-				"WebSprix fetch_and_process_outgoing_call_logs",
-			)
-			return {"status": "error", "message": "Failed to fetch calls", "details": response.text}
+	except requests.exceptions.RequestException as e:
+		frappe.log_error(str(e), "WebSprix fetch_and_process_outgoing_call_logs (request)")
+		return {"status": "error", "message": "API request failed", "details": str(e)}
 
+	if response.status_code not in [200, 201]:
+		frappe.log_error(
+			f"Failed to fetch outgoing calls: {response.status_code} - {response.text[:500]}",
+			"WebSprix fetch_and_process_outgoing_call_logs",
+		)
+		return {"status": "error", "message": "Failed to fetch calls", "details": response.text[:500]}
+
+	try:
 		call_logs = response.json() or {}
-		for log in call_logs.get("result", []):
+	except ValueError as e:
+		frappe.log_error(
+			f"Non-JSON response: {response.text[:500]}",
+			"WebSprix fetch_and_process_outgoing_call_logs (json)",
+		)
+		return {"status": "error", "message": "Invalid response from PBX", "details": str(e)}
+
+	inserted = 0
+	skipped = 0
+	for log in call_logs.get("result") or []:
+		try:
 			call_id = log.get("id")
 			if not call_id or frappe.db.exists("CRM Call Log", call_id):
+				skipped += 1
+				continue
+
+			from_number = log.get("src") or ""
+			to_number = format_phone_number(log.get("dst") or "") or log.get("dst") or ""
+			if not from_number or not to_number:
+				# CRM Call Log requires from/to — skip rather than 500
+				skipped += 1
 				continue
 
 			start_date = None
@@ -524,28 +568,38 @@ def fetch_and_process_outgoing_call_logs() -> dict:
 				try:
 					start_date = parse(log["created_at"]).replace(tzinfo=None)
 				except (ValueError, TypeError):
-					start_date = log["created_at"]
+					start_date = None
 
 			new_call_log = {
 				"doctype": "CRM Call Log",
 				"telephony_medium": "WebSprix",
 				"type": "Outgoing",
 				"id": call_id,
-				"from": log.get("src"),
-				"to": format_phone_number(log.get("dst", "")),
+				"from": from_number,
+				"to": to_number,
 				"caller": user,
-				"duration": log.get("duration") or 0,
+				"duration": int(log.get("duration") or 0),
 				"status": _map_log_status(log.get("disposition")),
 				"recording_url": log.get("recording_url") or "",
 				"start_time": start_date,
 			}
 			frappe.get_doc(new_call_log).insert(ignore_permissions=True)
+			inserted += 1
+		except Exception as e:
+			# One bad row must not abort the whole batch.
+			frappe.log_error(
+				f"row={log}\nerror={e}",
+				"WebSprix outgoing call log insert",
+			)
+			skipped += 1
 
-		frappe.db.commit()
-		return {"status": "success", "message": "Call logs processed successfully"}
-	except requests.exceptions.RequestException as e:
-		frappe.log_error(str(e), "WebSprix fetch_and_process_outgoing_call_logs")
-		return {"status": "error", "message": "API request failed", "details": str(e)}
+	frappe.db.commit()
+	return {
+		"status": "success",
+		"message": f"Outgoing logs processed: {inserted} inserted, {skipped} skipped",
+		"inserted": inserted,
+		"skipped": skipped,
+	}
 
 
 @frappe.whitelist()
@@ -558,7 +612,7 @@ def fetch_and_process_missed_call_logs() -> dict:
 		["websprix_number", "websprix_queue_id"],
 		as_dict=True,
 	)
-	if not agent:
+	if not agent or not agent.websprix_queue_id:
 		return {"status": "error", "message": "Settings not found for the current user"}
 
 	queue_name = (agent.websprix_queue_id or "").split("Q", 1)[0]
@@ -567,40 +621,70 @@ def fetch_and_process_missed_call_logs() -> dict:
 
 	try:
 		response = requests.get(url, headers=_get_headers(), timeout=30)
-		if response.status_code not in [200, 201]:
-			frappe.log_error(
-				f"Failed to fetch missed calls: {response.status_code} - {response.text}",
-				"WebSprix fetch_and_process_missed_call_logs",
-			)
-			return {"status": "error", "message": "Failed to fetch calls", "details": response.text}
+	except requests.exceptions.RequestException as e:
+		frappe.log_error(str(e), "WebSprix fetch_and_process_missed_call_logs (request)")
+		return {"status": "error", "message": "API request failed", "details": str(e)}
 
+	if response.status_code not in [200, 201]:
+		frappe.log_error(
+			f"Failed to fetch missed calls: {response.status_code} - {response.text[:500]}",
+			"WebSprix fetch_and_process_missed_call_logs",
+		)
+		return {"status": "error", "message": "Failed to fetch calls", "details": response.text[:500]}
+
+	try:
 		call_logs = response.json() or {}
-		for log in call_logs.get("result", []):
+	except ValueError as e:
+		frappe.log_error(
+			f"Non-JSON response: {response.text[:500]}",
+			"WebSprix fetch_and_process_missed_call_logs (json)",
+		)
+		return {"status": "error", "message": "Invalid response from PBX", "details": str(e)}
+
+	inserted = 0
+	skipped = 0
+	for log in call_logs.get("result") or []:
+		try:
 			call_id = log.get("id")
 			if not call_id or frappe.db.exists("CRM Call Log", call_id):
+				skipped += 1
 				continue
 
-			to_value = log.get("agent", "")
+			to_value = log.get("agent") or ""
 			if to_value and to_value != "NONE" and "S" in to_value:
 				to_value = to_value.split("S", 1)[1]
+
+			from_number = log.get("phone") or ""
+			if not from_number or not to_value:
+				skipped += 1
+				continue
 
 			new_call_log = {
 				"doctype": "CRM Call Log",
 				"telephony_medium": "WebSprix",
 				"id": call_id,
 				"type": "Incoming",
-				"from": log.get("phone"),
+				"from": from_number,
 				"to": to_value,
 				"status": "No Answer",
 				"start_time": log.get("ctime"),
 			}
 			frappe.get_doc(new_call_log).insert(ignore_permissions=True)
+			inserted += 1
+		except Exception as e:
+			frappe.log_error(
+				f"row={log}\nerror={e}",
+				"WebSprix missed call log insert",
+			)
+			skipped += 1
 
-		frappe.db.commit()
-		return {"status": "success", "message": "Call logs processed successfully"}
-	except requests.exceptions.RequestException as e:
-		frappe.log_error(str(e), "WebSprix fetch_and_process_missed_call_logs")
-		return {"status": "error", "message": "API request failed", "details": str(e)}
+	frappe.db.commit()
+	return {
+		"status": "success",
+		"message": f"Missed logs processed: {inserted} inserted, {skipped} skipped",
+		"inserted": inserted,
+		"skipped": skipped,
+	}
 
 
 def format_phone_number(phone_number: str) -> str:
