@@ -1,8 +1,8 @@
-import bleach
 import frappe
 import requests
 from frappe import _
 from frappe.integrations.utils import create_request_log
+from frappe.utils import strip_html_tags
 
 
 def _get_settings():
@@ -111,7 +111,8 @@ def make_a_call(to_number: str, from_number: str | None = None, caller_id: str |
 			pass
 		exc = error_body.get("error")
 		if exc:
-			frappe.throw(bleach.linkify(exc), title=_("WebSprix Exception"))
+			# Strip any HTML the PBX may have wrapped around the error message.
+			frappe.throw(strip_html_tags(str(exc)), title=_("WebSprix Exception"))
 		frappe.throw(_("WebSprix call failed"), title=_("WebSprix Exception"))
 
 	res = response.json() or {}

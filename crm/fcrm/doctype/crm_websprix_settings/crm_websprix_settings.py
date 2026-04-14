@@ -17,6 +17,7 @@ class CRMWebSprixSettings(Document):
 		enabled: DF.Check
 		organization_id: DF.Data | None
 		record_call: DF.Check
+		ringtone: DF.Attach | None
 	# end: auto-generated types
 
 	def validate(self):

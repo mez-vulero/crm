@@ -36,10 +36,15 @@ def is_call_integration_enabled():
 	exotel_enabled = frappe.db.get_single_value("CRM Exotel Settings", "enabled")
 	websprix_enabled = frappe.db.get_single_value("CRM WebSprix Settings", "enabled")
 
+	websprix_ringtone = None
+	if websprix_enabled:
+		websprix_ringtone = frappe.db.get_single_value("CRM WebSprix Settings", "ringtone") or None
+
 	return {
 		"twilio_enabled": twilio_enabled,
 		"exotel_enabled": exotel_enabled,
 		"websprix_enabled": websprix_enabled,
+		"websprix_ringtone": websprix_ringtone,
 		"default_calling_medium": get_user_default_calling_medium(),
 	}
 

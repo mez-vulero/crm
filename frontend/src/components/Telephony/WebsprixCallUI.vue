@@ -191,6 +191,7 @@ import {
 import router from '@/router'
 import { useDraggable, useWindowSize } from '@vueuse/core'
 import { globalStore } from '@/stores/global'
+import { websprixRingtoneUrl } from '@/composables/settings'
 import { Avatar, call, createResource } from 'frappe-ui'
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
@@ -1035,7 +1036,110 @@ async function setup() {
   }
 
   await getOrganizationUsers();
-  ringTone = new Audio("/assets/vulero_dialer/frontend/ring.mp3")
+  ringTone = createRingTone()
+}
+
+/**
+ * Build a ring-tone player. We previously loaded `/assets/vulero_dialer/frontend/ring.mp3`
+ * but that asset never existed on disk (the dialer app was a stub), so the
+ * browser logged a 404 every time a call popped. This synthesises a classic
+ * dual-tone ring with the Web Audio API instead — no static asset required,
+ * works offline, and falls back silently on browsers without AudioContext.
+ *
+ * Optionally, if a real audio file is dropped into the CRM at
+ * `/assets/crm/sounds/ring.mp3`, we use it. Otherwise, the synth fires.
+ */
+function createRingTone() {
+  let htmlAudio = null
+  // Prefer the admin-uploaded ringtone on CRM WebSprix Settings.
+  // Falls through to the synthetic Web Audio tone if missing or fails to load.
+  const customUrl = websprixRingtoneUrl.value
+  if (customUrl) {
+    try {
+      htmlAudio = new Audio(customUrl)
+      htmlAudio.loop = true
+      htmlAudio.addEventListener(
+        'error',
+        () => {
+          htmlAudio = null
+          console.warn(
+            '[WebSprix] Configured ringtone failed to load; using built-in tone',
+          )
+        },
+        { once: true },
+      )
+    } catch (e) {
+      htmlAudio = null
+    }
+  }
+
+  let audioCtx = null
+  let ringInterval = null
+
+  function playSyntheticBurst() {
+    try {
+      if (!audioCtx) {
+        const Ctx = window.AudioContext || window.webkitAudioContext
+        if (!Ctx) return
+        audioCtx = new Ctx()
+      }
+      // Two slightly detuned oscillators give a phone-ring timbre.
+      const osc1 = audioCtx.createOscillator()
+      const osc2 = audioCtx.createOscillator()
+      const gain = audioCtx.createGain()
+      osc1.frequency.value = 440
+      osc2.frequency.value = 480
+      const t = audioCtx.currentTime
+      gain.gain.setValueAtTime(0, t)
+      gain.gain.linearRampToValueAtTime(0.18, t + 0.05)
+      gain.gain.setValueAtTime(0.18, t + 1.6)
+      gain.gain.linearRampToValueAtTime(0, t + 1.7)
+      osc1.connect(gain)
+      osc2.connect(gain)
+      gain.connect(audioCtx.destination)
+      osc1.start(t)
+      osc2.start(t)
+      osc1.stop(t + 1.7)
+      osc2.stop(t + 1.7)
+    } catch (e) {
+      // Silent fallback — don't break the call popup on audio failure.
+    }
+  }
+
+  return {
+    play() {
+      if (htmlAudio) {
+        const promise = htmlAudio.play()
+        if (promise && typeof promise.catch === 'function') {
+          promise.catch(() => {
+            htmlAudio = null
+            this.play()
+          })
+        }
+        return Promise.resolve()
+      }
+      playSyntheticBurst()
+      if (!ringInterval) {
+        // ~3.5s cadence between ring bursts (matches PSTN ring/pause pattern)
+        ringInterval = setInterval(playSyntheticBurst, 3500)
+      }
+      return Promise.resolve()
+    },
+    pause() {
+      if (htmlAudio) {
+        try {
+          htmlAudio.pause()
+          htmlAudio.currentTime = 0
+        } catch (e) {
+          // ignore
+        }
+      }
+      if (ringInterval) {
+        clearInterval(ringInterval)
+        ringInterval = null
+      }
+    },
+  }
 }
 
 onBeforeUnmount(() => {

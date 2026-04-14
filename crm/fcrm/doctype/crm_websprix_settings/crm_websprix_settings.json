@@ -14,7 +14,9 @@
   "organization_id",
   "api_key",
   "section_break_b",
-  "base_url"
+  "base_url",
+  "section_break_ringtone",
+  "ringtone"
  ],
  "fields": [
   {
@@ -77,6 +79,18 @@
    "fieldtype": "Data",
    "label": "Base URL",
    "mandatory_depends_on": "enabled"
+  },
+  {
+   "fieldname": "section_break_ringtone",
+   "fieldtype": "Section Break",
+   "label": "Ringtone"
+  },
+  {
+   "depends_on": "enabled",
+   "description": "Optional. Audio file (mp3 / wav / m4a / ogg) played in the browser for incoming calls. If left blank, a built-in synthetic ring tone is used.",
+   "fieldname": "ringtone",
+   "fieldtype": "Attach",
+   "label": "Incoming Call Ringtone"
   }
  ],
  "index_web_pages_for_search": 1,

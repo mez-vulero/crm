@@ -30,6 +30,21 @@ def _date_range(from_date: str | None = None, to_date: str | None = None) -> tup
 	return from_date, to_date
 
 
+def _numeric_queue_id(full_queue_id: str | None) -> str:
+	"""Return the numeric portion of a WebSprix queue id.
+
+	WebSprix exposes queues to the agent dashboard as composite strings like
+	`162Qcustomer_service`, but the path-based REST endpoints (queue/join,
+	queue/leave, new-report/.../noanswer) expect just the numeric prefix
+	(e.g. `162`). The endpoints that take the queue in a JSON body (member/add,
+	member/remove) want the full composite id — those callers should NOT use
+	this helper.
+	"""
+	if not full_queue_id:
+		return ""
+	return full_queue_id.split("Q", 1)[0]
+
+
 @frappe.whitelist()
 def fetch_all_call_logs() -> dict:
 	"""Run incoming + outgoing + missed call-log sync for the current user.
@@ -231,7 +246,10 @@ def join_queue() -> dict:
 	extension, queue_id = _require_queue_config(user)
 
 	settings = _get_settings()
-	url = f"{_get_base_url()}/queue/join/{settings.organization_id}/{queue_id}/{extension}"
+	# The path-based queue endpoints expect just the numeric prefix
+	# (e.g. "162"), not the full composite id ("162Qcustomer_service").
+	queue_path_id = _numeric_queue_id(queue_id)
+	url = f"{_get_base_url()}/queue/join/{settings.organization_id}/{queue_path_id}/{extension}"
 
 	try:
 		response = requests.post(url, headers=_get_headers(), timeout=10)
@@ -270,7 +288,8 @@ def leave_queue() -> dict:
 	extension, queue_id = _require_queue_config(user)
 
 	settings = _get_settings()
-	url = f"{_get_base_url()}/queue/leave/{settings.organization_id}/{queue_id}/{extension}"
+	queue_path_id = _numeric_queue_id(queue_id)
+	url = f"{_get_base_url()}/queue/leave/{settings.organization_id}/{queue_path_id}/{extension}"
 
 	try:
 		response = requests.post(url, headers=_get_headers(), timeout=10)
@@ -674,7 +693,7 @@ def fetch_and_process_missed_call_logs(
 		return {"status": "error", "message": "Settings not found for the current user"}
 
 	# The PBX queue path uses the bare numeric queue id (the part before "Q...")
-	queue_name = (agent.websprix_queue_id or "").split("Q", 1)[0]
+	queue_name = _numeric_queue_id(agent.websprix_queue_id)
 	settings = _get_settings()
 	from_date, to_date = _date_range(from_date, to_date)
 	url = (
