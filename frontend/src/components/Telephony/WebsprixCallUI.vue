@@ -870,7 +870,29 @@ watch(
 
 
 async function setup() {
-  navigator.mediaDevices.getUserMedia({ audio: true })
+  // navigator.mediaDevices is only available in secure contexts (HTTPS or
+  // localhost). On plain HTTP the entire API is undefined, so accessing it
+  // without guarding throws "Cannot read properties of undefined" and aborts
+  // the whole component.
+  if (
+    typeof navigator !== 'undefined' &&
+    navigator.mediaDevices &&
+    typeof navigator.mediaDevices.getUserMedia === 'function'
+  ) {
+    try {
+      await navigator.mediaDevices.getUserMedia({ audio: true })
+    } catch (err) {
+      console.warn(
+        '[WebSprix] Microphone permission was not granted:',
+        err?.message || err,
+      )
+    }
+  } else {
+    console.warn(
+      '[WebSprix] navigator.mediaDevices is unavailable — browser calling requires HTTPS (or http://localhost). The SIP client will not register.',
+    )
+    return
+  }
 
   await startupClient()
 

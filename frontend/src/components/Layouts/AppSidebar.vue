@@ -98,26 +98,40 @@
       </SidebarLink>
       <SidebarLink
         v-if="websprixEnabled && queueId"
-        :label="
-          queueJoined
-            ? __('Leave Queue')
-            : __('Join Queue')
-        "
+        :label="queueLabel"
         :isCollapsed="isSidebarCollapsed"
-        :tooltip="__('WebSprix queue: {0}', [queueId])"
-        @click="toggleQueue"
+        :class="{ 'pointer-events-none opacity-60': queueLoading }"
+        @click="onQueueClick"
       >
         <template #icon>
-          <div class="relative h-4 w-4">
-            <FeatherIcon
-              :name="queueJoined ? 'log-out' : 'log-in'"
-              class="h-4 w-4"
+          <div class="relative inline-flex h-4 w-4 items-center justify-center">
+            <LoadingIndicator
+              v-if="queueLoading"
+              class="h-4 w-4 text-ink-gray-7"
             />
-            <span
-              class="absolute -right-0.5 -top-0.5 h-1.5 w-1.5 rounded-full ring-1 ring-surface-menu-bar"
-              :class="queueJoined ? 'bg-green-500' : 'bg-ink-gray-4'"
-            />
+            <template v-else>
+              <FeatherIcon
+                :name="queueJoined ? 'log-out' : 'log-in'"
+                class="h-4 w-4"
+              />
+              <span
+                class="pointer-events-none absolute -right-1 -top-1 h-2 w-2 rounded-full ring-2 ring-surface-menu-bar"
+                :class="
+                  queueJoined
+                    ? 'bg-green-500 shadow-[0_0_4px_rgba(34,197,94,0.6)]'
+                    : 'bg-amber-500'
+                "
+              />
+            </template>
           </div>
+        </template>
+        <template v-if="!isSidebarCollapsed" #right>
+          <Badge
+            :label="queueJoined ? __('Online') : __('Offline')"
+            :theme="queueJoined ? 'green' : 'gray'"
+            variant="subtle"
+            size="sm"
+          />
         </template>
       </SidebarLink>
       <SidebarLink
@@ -215,10 +229,12 @@ import {
 import {
   queueJoined,
   queueId,
+  queueLoading,
   toggleQueue,
 } from '@/stores/websprix_queue'
+import LoadingIndicator from '@/components/Icons/LoadingIndicator.vue'
 import { showChangePasswordModal } from '@/composables/modals'
-import { FeatherIcon, call } from 'frappe-ui'
+import { FeatherIcon, call, toast } from 'frappe-ui'
 import {
   SignupBanner,
   TrialBanner,
@@ -239,6 +255,32 @@ const { getPinnedViews, getPublicViews } = viewsStore()
 const { toggle: toggleNotificationPanel } = notificationsStore()
 const { capture } = useTelemetry()
 const { clearDemoData, isDemoDataCreated } = useDemoData()
+
+function onQueueClick() {
+  if (queueLoading.value) return
+  if (!websprixEnabled.value) {
+    toast.error(
+      __('WebSprix integration is disabled. Enable it in Settings → Telephony.'),
+    )
+    return
+  }
+  if (!queueId.value) {
+    toast.error(
+      __(
+        'No WebSprix Queue ID configured for your account. Set one in Settings → Telephony.',
+      ),
+    )
+    return
+  }
+  toggleQueue()
+}
+
+const queueLabel = computed(() => {
+  if (queueLoading.value) {
+    return queueJoined.value ? __('Leaving...') : __('Joining...')
+  }
+  return queueJoined.value ? __('Leave Queue') : __('Join Queue')
+})
 
 const isSidebarCollapsed = useStorage('isSidebarCollapsed', false)
 

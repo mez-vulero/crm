@@ -111,48 +111,118 @@ def queue_status() -> dict:
 	return {"queue_id": queue_id, "joined": joined}
 
 
+def _require_queue_config(user: str) -> tuple[str, str]:
+	"""Ensure the user has both extension and queue id configured."""
+	if not frappe.db.exists("CRM Telephony Agent", user):
+		frappe.throw(
+			_("You don't have a Telephony Agent profile. Ask a manager to create one."),
+			title=_("Telephony Agent Not Configured"),
+		)
+
+	agent = frappe.db.get_value(
+		"CRM Telephony Agent",
+		user,
+		["websprix_number", "websprix_queue_id", "websprix"],
+		as_dict=True,
+	)
+
+	if not agent.get("websprix"):
+		frappe.throw(
+			_("WebSprix is not enabled on your Telephony Agent profile. Enable it in Settings → Telephony."),
+			title=_("WebSprix Not Enabled"),
+		)
+
+	if not agent.get("websprix_number"):
+		frappe.throw(
+			_("Your WebSprix extension number is not set. Configure it in Settings → Telephony."),
+			title=_("WebSprix Number Missing"),
+		)
+
+	if not agent.get("websprix_queue_id"):
+		frappe.throw(
+			_("Your WebSprix Queue ID is not set. Configure it in Settings → Telephony."),
+			title=_("WebSprix Queue Not Configured"),
+		)
+
+	return agent["websprix_number"], agent["websprix_queue_id"]
+
+
 @frappe.whitelist()
 def join_queue() -> dict:
 	"""Join the WebSprix queue configured for the current user."""
 	user = frappe.session.user
-	agent = frappe.db.get_value("CRM Telephony Agent", user, "websprix_number")
-	queue_id = frappe.db.get_value("CRM Telephony Agent", user, "websprix_queue_id")
-
-	if not (agent and queue_id):
-		frappe.throw(_("WebSprix queue is not configured for user"))
+	extension, queue_id = _require_queue_config(user)
 
 	settings = _get_settings()
-	url = f"{_get_base_url()}/queue/join/{settings.organization_id}/{queue_id}/{agent}"
+	url = f"{_get_base_url()}/queue/join/{settings.organization_id}/{queue_id}/{extension}"
 
 	try:
-		requests.post(url, headers=_get_headers(), timeout=10)
-		frappe.cache().hset(QUEUE_CACHE_KEY, user, "joined")
-		return {"joined": True}
+		response = requests.post(url, headers=_get_headers(), timeout=10)
+		response.raise_for_status()
+	except requests.exceptions.Timeout:
+		frappe.throw(
+			_("WebSprix did not respond in time. Please try again."),
+			title=_("Queue Join Failed"),
+		)
+	except requests.exceptions.HTTPError as e:
+		frappe.log_error(
+			f"{e}\nStatus: {getattr(e.response, 'status_code', '?')}\nBody: {getattr(e.response, 'text', '')}",
+			"WebSprix join_queue",
+		)
+		frappe.throw(
+			_("WebSprix rejected the join request ({0}).").format(
+				getattr(e.response, "status_code", "error")
+			),
+			title=_("Queue Join Failed"),
+		)
 	except requests.exceptions.RequestException as e:
 		frappe.log_error(str(e), "WebSprix join_queue")
-		return {"joined": False}
+		frappe.throw(
+			_("Could not reach WebSprix. Check your network and the Base URL in settings."),
+			title=_("Queue Join Failed"),
+		)
+
+	frappe.cache().hset(QUEUE_CACHE_KEY, user, "joined")
+	return {"joined": True, "queue_id": queue_id}
 
 
 @frappe.whitelist()
 def leave_queue() -> dict:
 	"""Leave the WebSprix queue configured for the current user."""
 	user = frappe.session.user
-	agent = frappe.db.get_value("CRM Telephony Agent", user, "websprix_number")
-	queue_id = frappe.db.get_value("CRM Telephony Agent", user, "websprix_queue_id")
-
-	if not (agent and queue_id):
-		frappe.throw(_("WebSprix queue is not configured for user"))
+	extension, queue_id = _require_queue_config(user)
 
 	settings = _get_settings()
-	url = f"{_get_base_url()}/queue/leave/{settings.organization_id}/{queue_id}/{agent}"
+	url = f"{_get_base_url()}/queue/leave/{settings.organization_id}/{queue_id}/{extension}"
 
 	try:
-		requests.post(url, headers=_get_headers(), timeout=10)
-		frappe.cache().hdel(QUEUE_CACHE_KEY, user)
-		return {"joined": False}
+		response = requests.post(url, headers=_get_headers(), timeout=10)
+		response.raise_for_status()
+	except requests.exceptions.Timeout:
+		frappe.throw(
+			_("WebSprix did not respond in time. Please try again."),
+			title=_("Queue Leave Failed"),
+		)
+	except requests.exceptions.HTTPError as e:
+		frappe.log_error(
+			f"{e}\nStatus: {getattr(e.response, 'status_code', '?')}\nBody: {getattr(e.response, 'text', '')}",
+			"WebSprix leave_queue",
+		)
+		frappe.throw(
+			_("WebSprix rejected the leave request ({0}).").format(
+				getattr(e.response, "status_code", "error")
+			),
+			title=_("Queue Leave Failed"),
+		)
 	except requests.exceptions.RequestException as e:
 		frappe.log_error(str(e), "WebSprix leave_queue")
-		return {"joined": True}
+		frappe.throw(
+			_("Could not reach WebSprix. Check your network and the Base URL in settings."),
+			title=_("Queue Leave Failed"),
+		)
+
+	frappe.cache().hdel(QUEUE_CACHE_KEY, user)
+	return {"joined": False, "queue_id": queue_id}
 
 
 @frappe.whitelist()
