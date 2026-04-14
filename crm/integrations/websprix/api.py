@@ -196,11 +196,36 @@ def get_contact_info(phone_number: str) -> dict:
 
 @frappe.whitelist()
 def queue_status() -> dict:
-	"""Return the queue id configured for the user and whether they have joined."""
+	"""Return the queue id configured for the user and whether they have joined.
+
+	Source of truth is the WebSprix PBX (via `/member/{customer_id}/queues_for_agent`).
+	The local cache is only used to avoid a PBX round-trip on every call, and is
+	kept in sync with the PBX's answer on each request.
+	"""
 	user = frappe.session.user
 	queue_id = frappe.db.get_value("CRM Telephony Agent", user, "websprix_queue_id")
-	joined = frappe.cache().hget(QUEUE_CACHE_KEY, user) == "joined"
-	return {"queue_id": queue_id, "joined": joined}
+	if not queue_id:
+		return {"queue_id": None, "joined": False}
+
+	cached = frappe.cache().hget(QUEUE_CACHE_KEY, user)
+	if cached in ("joined", "not_joined"):
+		return {"queue_id": queue_id, "joined": cached == "joined"}
+
+	# Cache miss — ask the PBX directly (silent on failure to keep UI responsive)
+	try:
+		status_check = get_queue_status()
+	except Exception:
+		status_check = None
+
+	if isinstance(status_check, dict) and status_check.get("status") == "success":
+		is_member = bool(status_check.get("is_member"))
+		frappe.cache().hset(
+			QUEUE_CACHE_KEY, user, "joined" if is_member else "not_joined"
+		)
+		return {"queue_id": queue_id, "joined": is_member}
+
+	# PBX unreachable or queue not found — assume not joined, don't cache.
+	return {"queue_id": queue_id, "joined": False}
 
 
 def _require_queue_config(user: str) -> tuple[str, str]:
@@ -311,9 +336,25 @@ def _handle_queue_http_error(e, action_label: str, body: dict):
 	)
 
 
+def _is_already_member_error(pbx_msg: str) -> bool:
+	msg = (pbx_msg or "").lower()
+	return "already" in msg and ("exist" in msg or "member" in msg or "queue" in msg)
+
+
+def _is_not_member_error(pbx_msg: str) -> bool:
+	msg = (pbx_msg or "").lower()
+	if "not" not in msg:
+		return False
+	return "member" in msg or "exist" in msg or "found" in msg
+
+
 @frappe.whitelist()
 def join_queue() -> dict:
-	"""Join the WebSprix queue configured for the current user."""
+	"""Join the WebSprix queue configured for the current user.
+
+	Idempotent: if the PBX reports the agent is already a member, we treat
+	that as success and sync our local cache accordingly.
+	"""
 	user = frappe.session.user
 	_require_queue_config(user)
 
@@ -328,6 +369,14 @@ def join_queue() -> dict:
 			title=_("Queue Join Failed"),
 		)
 	except requests.exceptions.HTTPError as e:
+		pbx_msg = _short_pbx_error(getattr(e, "response", None))
+		if _is_already_member_error(pbx_msg):
+			# Already in the queue — state the frontend wanted anyway.
+			frappe.cache().hset(QUEUE_CACHE_KEY, user, "joined")
+			queue_id = frappe.db.get_value(
+				"CRM Telephony Agent", user, "websprix_queue_id"
+			)
+			return {"joined": True, "queue_id": queue_id}
 		_handle_queue_http_error(e, "join", body or {})
 	except requests.exceptions.RequestException as e:
 		frappe.log_error(str(e), "WebSprix join_queue")
@@ -342,7 +391,11 @@ def join_queue() -> dict:
 
 @frappe.whitelist()
 def leave_queue() -> dict:
-	"""Leave the WebSprix queue configured for the current user."""
+	"""Leave the WebSprix queue configured for the current user.
+
+	Idempotent: if the PBX reports the agent wasn't in the queue to begin
+	with, we treat that as success and sync our local cache accordingly.
+	"""
 	user = frappe.session.user
 	_require_queue_config(user)
 
@@ -357,6 +410,14 @@ def leave_queue() -> dict:
 			title=_("Queue Leave Failed"),
 		)
 	except requests.exceptions.HTTPError as e:
+		pbx_msg = _short_pbx_error(getattr(e, "response", None))
+		if _is_not_member_error(pbx_msg):
+			# Wasn't in the queue — state the frontend wanted anyway.
+			frappe.cache().hset(QUEUE_CACHE_KEY, user, "not_joined")
+			queue_id = frappe.db.get_value(
+				"CRM Telephony Agent", user, "websprix_queue_id"
+			)
+			return {"joined": False, "queue_id": queue_id}
 		_handle_queue_http_error(e, "leave", body or {})
 	except requests.exceptions.RequestException as e:
 		frappe.log_error(str(e), "WebSprix leave_queue")
@@ -365,7 +426,7 @@ def leave_queue() -> dict:
 			title=_("Queue Leave Failed"),
 		)
 
-	frappe.cache().hdel(QUEUE_CACHE_KEY, user)
+	frappe.cache().hset(QUEUE_CACHE_KEY, user, "not_joined")
 	return {"joined": False, "queue_id": queue_id}
 
 
