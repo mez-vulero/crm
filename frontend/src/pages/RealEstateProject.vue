@@ -39,6 +39,10 @@
               {{ doc.project_name }}
             </h2>
             <div class="mt-1 flex items-center gap-3 text-base text-ink-gray-5">
+              <span v-if="doc.project_type" class="font-medium text-ink-gray-7">
+                {{ doc.project_type }}
+              </span>
+              <span v-if="doc.project_type && (doc.city || doc.location)">·</span>
               <span v-if="doc.city">{{ doc.city }}</span>
               <span v-if="doc.location && doc.city">-</span>
               <span v-if="doc.location">{{ doc.location }}</span>
@@ -55,6 +59,13 @@
               </span>
             </div>
           </div>
+          <Button
+            v-if="doc.image"
+            variant="subtle"
+            iconLeft="image"
+            :label="__('View Property Image')"
+            @click="openImagePreview(doc.image, doc.project_name)"
+          />
         </div>
         <!-- Unit Summary Cards -->
         <div class="mt-4 grid grid-cols-4 gap-3">
@@ -67,6 +78,42 @@
             <div class="mt-1 text-xl font-semibold text-ink-gray-9">
               {{ stat.value }}
             </div>
+          </div>
+        </div>
+
+        <!-- Specifications -->
+        <div v-if="hasSpecs" class="mt-4">
+          <div class="mb-2 text-sm font-medium text-ink-gray-5">
+            {{ __('Specifications') }}
+          </div>
+          <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+            <div
+              v-for="spec in specsList"
+              :key="spec.label"
+              class="rounded-lg border p-3"
+            >
+              <div class="text-xs text-ink-gray-5">{{ spec.label }}</div>
+              <div class="mt-1 text-base font-semibold text-ink-gray-9">
+                {{ spec.value }}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Amenities -->
+        <div v-if="amenityChips.length" class="mt-4">
+          <div class="mb-2 text-sm font-medium text-ink-gray-5">
+            {{ __('Amenities') }}
+          </div>
+          <div class="flex flex-wrap gap-2">
+            <Badge
+              v-for="amenity in amenityChips"
+              :key="amenity"
+              variant="subtle"
+              theme="blue"
+              :label="amenity"
+              size="md"
+            />
           </div>
         </div>
       </div>
@@ -86,21 +133,17 @@
           ]"
           class="w-40"
         />
-        <FormControl
-          v-model="filters.unit_type"
-          type="select"
-          :label="__('Unit Type')"
-          :options="[
-            { label: __('All Types'), value: '' },
-            { label: 'Studio', value: 'Studio' },
-            { label: '1BR', value: '1BR' },
-            { label: '2BR', value: '2BR' },
-            { label: '3BR', value: '3BR' },
-            { label: '4BR', value: '4BR' },
-            { label: 'Penthouse', value: 'Penthouse' },
-          ]"
-          class="w-40"
-        />
+        <div class="w-48">
+          <label class="block text-xs text-ink-gray-5 mb-1">{{ __('Unit Type') }}</label>
+          <Link
+            class="form-control"
+            size="sm"
+            :value="filters.unit_type"
+            doctype="CRM Unit Type"
+            :placeholder="__('All Types')"
+            @change="(v) => (filters.unit_type = v || '')"
+          />
+        </div>
         <div class="ml-auto flex items-center gap-3">
           <span class="text-sm text-ink-gray-5">
             {{ filteredUnits.length }} {{ __('units') }}
@@ -122,9 +165,11 @@
               <th class="px-5 py-2 font-medium">{{ __('Unit') }}</th>
               <th class="px-3 py-2 font-medium">{{ __('Floor') }}</th>
               <th class="px-3 py-2 font-medium">{{ __('Type') }}</th>
+              <th class="px-3 py-2 font-medium">{{ __('Bed/Bath') }}</th>
               <th class="px-3 py-2 font-medium">{{ __('Size (sqm)') }}</th>
               <th class="px-3 py-2 font-medium">{{ __('Price') }}</th>
               <th class="px-3 py-2 font-medium">{{ __('View') }}</th>
+              <th class="px-3 py-2 font-medium">{{ __('Floor Plan') }}</th>
               <th class="px-3 py-2 font-medium">{{ __('Status') }}</th>
             </tr>
           </thead>
@@ -145,6 +190,9 @@
                 {{ unit.unit_type || '-' }}
               </td>
               <td class="px-3 py-2.5 text-base text-ink-gray-7">
+                {{ formatBedBath(unit) }}
+              </td>
+              <td class="px-3 py-2.5 text-base text-ink-gray-7">
                 {{ unit.size_sqm || '-' }}
               </td>
               <td class="px-3 py-2.5 text-base text-ink-gray-7">
@@ -152,6 +200,16 @@
               </td>
               <td class="px-3 py-2.5 text-base text-ink-gray-7">
                 {{ unit.view_direction || '-' }}
+              </td>
+              <td class="px-3 py-2.5" @click.stop>
+                <Button
+                  v-if="unit.floor_plan"
+                  variant="subtle"
+                  size="sm"
+                  :label="__('View')"
+                  @click="openImagePreview(unit.floor_plan, `${unit.unit_number} \u2014 ${__('Floor Plan')}`)"
+                />
+                <span v-else class="text-ink-gray-4">-</span>
               </td>
               <td class="px-3 py-2.5">
                 <Badge
@@ -181,7 +239,7 @@
   >
     <template #body-content>
       <div v-if="selectedUnit" class="flex flex-col gap-4">
-        <div class="grid grid-cols-2 gap-4">
+        <div class="grid grid-cols-2 gap-4 sm:grid-cols-3">
           <div>
             <div class="text-sm text-ink-gray-5">{{ __('Unit Type') }}</div>
             <div class="text-base text-ink-gray-9">
@@ -198,6 +256,54 @@
             <div class="text-sm text-ink-gray-5">{{ __('Size (sqm)') }}</div>
             <div class="text-base text-ink-gray-9">
               {{ selectedUnit.size_sqm || '-' }}
+            </div>
+          </div>
+          <div>
+            <div class="text-sm text-ink-gray-5">{{ __('Bedrooms') }}</div>
+            <div class="text-base text-ink-gray-9">
+              {{ selectedUnit.bedrooms ?? '-' }}
+            </div>
+          </div>
+          <div>
+            <div class="text-sm text-ink-gray-5">{{ __('Bathrooms') }}</div>
+            <div class="text-base text-ink-gray-9">
+              {{ selectedUnit.bathrooms ?? '-' }}
+            </div>
+          </div>
+          <div>
+            <div class="text-sm text-ink-gray-5">{{ __('Kitchens') }}</div>
+            <div class="text-base text-ink-gray-9">
+              {{ selectedUnit.kitchen_count ?? '-' }}
+              <span v-if="selectedUnit.kitchen_layout" class="text-ink-gray-5 text-sm">
+                ({{ selectedUnit.kitchen_layout }})
+              </span>
+            </div>
+          </div>
+          <div>
+            <div class="text-sm text-ink-gray-5">{{ __('Balconies') }}</div>
+            <div class="text-base text-ink-gray-9">
+              {{ selectedUnit.balcony_count ?? '-' }}
+              <span v-if="selectedUnit.balcony_size_sqm" class="text-ink-gray-5 text-sm">
+                ({{ selectedUnit.balcony_size_sqm }} {{ __('sqm') }})
+              </span>
+            </div>
+          </div>
+          <div>
+            <div class="text-sm text-ink-gray-5">{{ __('Parking') }}</div>
+            <div class="text-base text-ink-gray-9">
+              {{ selectedUnit.unit_parking_spaces ?? '-' }}
+            </div>
+          </div>
+          <div>
+            <div class="text-sm text-ink-gray-5">{{ __('Furnishing') }}</div>
+            <div class="text-base text-ink-gray-9">
+              {{ selectedUnit.furnishing || '-' }}
+            </div>
+          </div>
+          <div>
+            <div class="text-sm text-ink-gray-5">{{ __('Ceiling Height (m)') }}</div>
+            <div class="text-base text-ink-gray-9">
+              {{ selectedUnit.ceiling_height_m ?? '-' }}
             </div>
           </div>
           <div>
@@ -223,6 +329,19 @@
               size="md"
             />
           </div>
+        </div>
+        <div class="flex flex-wrap gap-2">
+          <Badge v-if="selectedUnit.has_laundry_room" variant="subtle" theme="green" :label="__('Laundry Room')" />
+          <Badge v-if="selectedUnit.maid_room" variant="subtle" theme="green" :label="__('Maid Room')" />
+          <Badge v-if="selectedUnit.storage_room" variant="subtle" theme="green" :label="__('Storage Room')" />
+        </div>
+        <div v-if="selectedUnit.floor_plan" class="pt-2">
+          <Button
+            variant="subtle"
+            iconLeft="image"
+            :label="__('View Floor Plan')"
+            @click="openImagePreview(selectedUnit.floor_plan, `${selectedUnit.unit_number} \u2014 ${__('Floor Plan')}`)"
+          />
         </div>
         <div v-if="selectedUnit.notes">
           <div class="text-sm text-ink-gray-5">{{ __('Notes') }}</div>
@@ -313,22 +432,32 @@
           :placeholder="__('e.g. A-101')"
         />
         <div class="grid grid-cols-2 gap-4">
-          <FormControl
-            v-model="newUnit.unit_type"
-            :label="__('Unit Type')"
-            type="select"
-            :options="[
-              { label: 'Studio', value: 'Studio' },
-              { label: '1BR', value: '1BR' },
-              { label: '2BR', value: '2BR' },
-              { label: '3BR', value: '3BR' },
-              { label: '4BR', value: '4BR' },
-              { label: 'Penthouse', value: 'Penthouse' },
-            ]"
-          />
+          <div class="space-y-1.5">
+            <label class="block text-xs text-ink-gray-5">{{ __('Unit Type') }}</label>
+            <Link
+              class="form-control"
+              size="md"
+              :value="newUnit.unit_type"
+              doctype="CRM Unit Type"
+              :placeholder="__('Search Unit Type')"
+              @change="(v) => (newUnit.unit_type = v || '')"
+            />
+          </div>
           <FormControl
             v-model="newUnit.floor"
             :label="__('Floor')"
+            type="number"
+          />
+        </div>
+        <div class="grid grid-cols-2 gap-4">
+          <FormControl
+            v-model="newUnit.bedrooms"
+            :label="__('Bedrooms')"
+            type="number"
+          />
+          <FormControl
+            v-model="newUnit.bathrooms"
+            :label="__('Bathrooms')"
             type="number"
           />
         </div>
@@ -368,10 +497,26 @@
       />
     </template>
   </Dialog>
+
+  <!-- Image Preview Dialog -->
+  <Dialog
+    v-model="showImagePreview"
+    :options="{ title: imagePreview.title, size: '4xl' }"
+  >
+    <template #body-content>
+      <img
+        v-if="imagePreview.url"
+        :src="imagePreview.url"
+        class="m-auto max-h-[70vh] rounded border"
+        :alt="imagePreview.title"
+      />
+    </template>
+  </Dialog>
 </template>
 
 <script setup>
 import LayoutHeader from '@/components/LayoutHeader.vue'
+import Link from '@/components/Controls/Link.vue'
 import { formatDate } from '@/utils'
 import { formatCurrency } from '@/utils/numberFormat'
 import {
@@ -415,6 +560,37 @@ const unitStats = computed(() => [
   { label: __('Reserved'), value: doc.value.reserved_units || 0 },
   { label: __('Sold'), value: doc.value.sold_units || 0 },
 ])
+
+const specsList = computed(() => {
+  const d = doc.value
+  const items = []
+  if (d.project_type) items.push({ label: __('Type'), value: d.project_type })
+  if (d.number_of_stories) items.push({ label: __('Stories'), value: d.number_of_stories })
+  if (d.gross_building_area)
+    items.push({ label: __('Built (sqm)'), value: d.gross_building_area })
+  if (d.total_land_area)
+    items.push({ label: __('Land (sqm)'), value: d.total_land_area })
+  if (d.parking_spaces) items.push({ label: __('Parking'), value: d.parking_spaces })
+  if (d.elevators) items.push({ label: __('Elevators'), value: d.elevators })
+  return items
+})
+
+const hasSpecs = computed(() => specsList.value.length > 0)
+
+const amenityChips = computed(() =>
+  (doc.value.amenities || []).map((row) => row.amenity).filter(Boolean),
+)
+
+// Image preview
+const showImagePreview = ref(false)
+const imagePreview = reactive({ url: '', title: '' })
+
+function openImagePreview(url, title) {
+  if (!url) return
+  imagePreview.url = url
+  imagePreview.title = title || __('Preview')
+  showImagePreview.value = true
+}
 
 // Status management
 const statusOptions = computed(() =>
@@ -462,6 +638,19 @@ const units = createListResource({
     'status',
     'notes',
     'linked_deal',
+    'bedrooms',
+    'bathrooms',
+    'kitchen_count',
+    'kitchen_layout',
+    'has_laundry_room',
+    'balcony_count',
+    'balcony_size_sqm',
+    'maid_room',
+    'storage_room',
+    'unit_parking_spaces',
+    'furnishing',
+    'ceiling_height_m',
+    'floor_plan',
   ],
   filters: unitFilters.value,
   orderBy: 'floor asc, unit_number asc',
@@ -482,6 +671,13 @@ function formatPrice(unit) {
   const price = unit.price_override || unit.base_price
   if (!price) return '-'
   return formatCurrency(price)
+}
+
+function formatBedBath(unit) {
+  const bd = unit.bedrooms
+  const ba = unit.bathrooms
+  if (!bd && !ba) return '-'
+  return `${bd ?? 0} / ${ba ?? 0}`
 }
 
 function unitStatusColor(status) {
@@ -545,11 +741,13 @@ const showAddUnitDialog = ref(false)
 const addingUnit = ref(false)
 const newUnit = reactive({
   unit_number: '',
-  unit_type: 'Studio',
+  unit_type: '',
   floor: '',
   size_sqm: '',
   base_price: '',
   view_direction: '',
+  bedrooms: '',
+  bathrooms: '',
 })
 
 async function addUnit() {
@@ -564,21 +762,26 @@ async function addUnit() {
         doctype: 'Property Unit',
         project: props.projectId,
         unit_number: newUnit.unit_number,
-        unit_type: newUnit.unit_type,
+        unit_type: newUnit.unit_type || null,
         floor: newUnit.floor || 0,
         size_sqm: newUnit.size_sqm || 0,
         base_price: newUnit.base_price || 0,
         view_direction: newUnit.view_direction || '',
+        bedrooms: newUnit.bedrooms || 0,
+        bathrooms: newUnit.bathrooms || 0,
         status: 'Available',
       },
     })
     toast.success(__('Unit added'))
     showAddUnitDialog.value = false
     newUnit.unit_number = ''
+    newUnit.unit_type = ''
     newUnit.floor = ''
     newUnit.size_sqm = ''
     newUnit.base_price = ''
     newUnit.view_direction = ''
+    newUnit.bedrooms = ''
+    newUnit.bathrooms = ''
     units.reload()
     project.reload()
   } catch (err) {

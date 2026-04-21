@@ -579,7 +579,17 @@
   <!-- Generate Contract Dialog -->
   <Dialog v-model="showContractDialog" :options="{ title: __('Generate Contract'), size: 'md' }">
     <template #body-content>
-      <FormControl v-model="contractTemplate" :label="__('Select Template')" type="text" :placeholder="__('Contract Template ID')" />
+      <div class="space-y-1.5">
+        <label class="block text-xs text-ink-gray-5">{{ __('Select Template') }}</label>
+        <Link
+          class="form-control"
+          size="md"
+          :value="contractTemplate"
+          doctype="Contract Template"
+          :placeholder="__('Search Contract Template')"
+          @change="(data) => (contractTemplate = data)"
+        />
+      </div>
     </template>
     <template #actions>
       <Button variant="solid" :label="__('Generate')" @click="generateContract" />
@@ -658,6 +668,7 @@ import CommunicationArea from '@/components/CommunicationArea.vue'
 import WhatsappTemplateSelectorModal from '@/components/Modals/WhatsappTemplateSelectorModal.vue'
 import AllModals from '@/components/Activities/AllModals.vue'
 import FilesUploader from '@/components/FilesUploader/FilesUploader.vue'
+import Link from '@/components/Controls/Link.vue'
 import { timeAgo, formatDate, startCase } from '@/utils'
 import { globalStore } from '@/stores/global'
 import { usersStore } from '@/stores/users'

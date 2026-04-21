@@ -1,7 +1,7 @@
 {
  "actions": [],
  "allow_rename": 1,
- "autoname": "hash",
+ "autoname": "format:{project}-{unit_number}",
  "creation": "2026-03-28 00:00:00.000000",
  "doctype": "DocType",
  "engine": "InnoDB",
@@ -15,9 +15,27 @@
   "section_break_pu02",
   "floor",
   "size_sqm",
+  "ceiling_height_m",
   "column_break_pu03",
   "view_direction",
+  "furnishing",
   "linked_deal",
+  "layout_section",
+  "bedrooms",
+  "bathrooms",
+  "column_break_layout01",
+  "maid_room",
+  "storage_room",
+  "kitchen_section",
+  "kitchen_count",
+  "kitchen_layout",
+  "column_break_kitchen01",
+  "has_laundry_room",
+  "outdoor_section",
+  "balcony_count",
+  "balcony_size_sqm",
+  "column_break_outdoor01",
+  "unit_parking_spaces",
   "pricing_section",
   "base_price",
   "column_break_pu04",
@@ -54,10 +72,10 @@
   },
   {
    "fieldname": "unit_type",
-   "fieldtype": "Select",
+   "fieldtype": "Link",
    "in_list_view": 1,
    "label": "Unit Type",
-   "options": "Studio\n1BR\n2BR\n3BR\n4BR\nPenthouse"
+   "options": "CRM Unit Type"
   },
   {
    "default": "Available",
@@ -84,6 +102,11 @@
    "label": "Size (sqm)"
   },
   {
+   "fieldname": "ceiling_height_m",
+   "fieldtype": "Float",
+   "label": "Ceiling Height (m)"
+  },
+  {
    "fieldname": "column_break_pu03",
    "fieldtype": "Column Break"
   },
@@ -94,11 +117,102 @@
    "options": "\nGarden\nCity\nSea\nCourtyard\nStreet"
   },
   {
+   "default": "Unfurnished",
+   "fieldname": "furnishing",
+   "fieldtype": "Select",
+   "label": "Furnishing",
+   "options": "Unfurnished\nSemi-Furnished\nFurnished"
+  },
+  {
    "fieldname": "linked_deal",
    "fieldtype": "Link",
    "label": "Linked Deal",
    "options": "CRM Deal",
    "read_only": 1
+  },
+  {
+   "fieldname": "layout_section",
+   "fieldtype": "Section Break",
+   "label": "Layout"
+  },
+  {
+   "fieldname": "bedrooms",
+   "fieldtype": "Int",
+   "in_list_view": 1,
+   "label": "Bedrooms"
+  },
+  {
+   "fieldname": "bathrooms",
+   "fieldtype": "Int",
+   "in_list_view": 1,
+   "label": "Bathrooms"
+  },
+  {
+   "fieldname": "column_break_layout01",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "0",
+   "fieldname": "maid_room",
+   "fieldtype": "Check",
+   "label": "Maid Room"
+  },
+  {
+   "default": "0",
+   "fieldname": "storage_room",
+   "fieldtype": "Check",
+   "label": "Storage Room"
+  },
+  {
+   "fieldname": "kitchen_section",
+   "fieldtype": "Section Break",
+   "label": "Kitchen"
+  },
+  {
+   "default": "1",
+   "fieldname": "kitchen_count",
+   "fieldtype": "Int",
+   "label": "Number of Kitchens"
+  },
+  {
+   "fieldname": "kitchen_layout",
+   "fieldtype": "Select",
+   "label": "Kitchen Layout",
+   "options": "\nOpen\nClosed\nBoth"
+  },
+  {
+   "fieldname": "column_break_kitchen01",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "0",
+   "fieldname": "has_laundry_room",
+   "fieldtype": "Check",
+   "label": "Laundry Room"
+  },
+  {
+   "fieldname": "outdoor_section",
+   "fieldtype": "Section Break",
+   "label": "Outdoor & Parking"
+  },
+  {
+   "fieldname": "balcony_count",
+   "fieldtype": "Int",
+   "label": "Number of Balconies"
+  },
+  {
+   "fieldname": "balcony_size_sqm",
+   "fieldtype": "Float",
+   "label": "Total Balcony Size (sqm)"
+  },
+  {
+   "fieldname": "column_break_outdoor01",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "unit_parking_spaces",
+   "fieldtype": "Int",
+   "label": "Parking Spaces"
   },
   {
    "fieldname": "pricing_section",
@@ -146,11 +260,11 @@
  ],
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-03-28 00:00:00.000000",
+ "modified": "2026-04-21 00:00:00.000000",
  "modified_by": "Administrator",
  "module": "FCRM",
  "name": "Property Unit",
- "naming_rule": "Random",
+ "naming_rule": "Expression",
  "owner": "Administrator",
  "permissions": [
   {

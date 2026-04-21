@@ -1,19 +1,27 @@
 {
  "actions": [],
  "allow_rename": 1,
- "autoname": "hash",
+ "autoname": "field:project_name",
  "creation": "2026-03-28 00:00:00.000000",
  "doctype": "DocType",
  "engine": "InnoDB",
  "field_order": [
   "details_tab",
   "project_name",
+  "project_type",
   "status",
   "column_break_rep01",
   "location",
   "city",
   "section_break_rep02",
   "description",
+  "specifications_section",
+  "number_of_stories",
+  "gross_building_area",
+  "total_land_area",
+  "column_break_spec01",
+  "parking_spaces",
+  "elevators",
   "dates_section",
   "launch_date",
   "column_break_rep03",
@@ -24,6 +32,8 @@
   "column_break_rep04",
   "reserved_units",
   "sold_units",
+  "amenities_section",
+  "amenities",
   "image_section",
   "image"
  ],
@@ -39,6 +49,13 @@
    "in_list_view": 1,
    "label": "Project Name",
    "reqd": 1
+  },
+  {
+   "fieldname": "project_type",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Project Type",
+   "options": "CRM Project Type"
   },
   {
    "default": "Active",
@@ -71,6 +88,40 @@
    "fieldname": "description",
    "fieldtype": "Text Editor",
    "label": "Description"
+  },
+  {
+   "fieldname": "specifications_section",
+   "fieldtype": "Section Break",
+   "label": "Specifications"
+  },
+  {
+   "fieldname": "number_of_stories",
+   "fieldtype": "Int",
+   "label": "Number of Stories"
+  },
+  {
+   "fieldname": "gross_building_area",
+   "fieldtype": "Float",
+   "label": "Gross Building Area (sqm)"
+  },
+  {
+   "fieldname": "total_land_area",
+   "fieldtype": "Float",
+   "label": "Total Land Area (sqm)"
+  },
+  {
+   "fieldname": "column_break_spec01",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "parking_spaces",
+   "fieldtype": "Int",
+   "label": "Parking Spaces"
+  },
+  {
+   "fieldname": "elevators",
+   "fieldtype": "Int",
+   "label": "Elevators"
   },
   {
    "fieldname": "dates_section",
@@ -134,6 +185,17 @@
    "read_only": 1
   },
   {
+   "fieldname": "amenities_section",
+   "fieldtype": "Section Break",
+   "label": "Amenities"
+  },
+  {
+   "fieldname": "amenities",
+   "fieldtype": "Table",
+   "label": "Amenities",
+   "options": "Real Estate Project Amenity"
+  },
+  {
    "fieldname": "image_section",
    "fieldtype": "Section Break",
    "label": "Image"
@@ -146,11 +208,11 @@
  ],
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-03-28 00:00:00.000000",
+ "modified": "2026-04-21 00:00:00.000000",
  "modified_by": "Administrator",
  "module": "FCRM",
  "name": "Real Estate Project",
- "naming_rule": "Random",
+ "naming_rule": "By fieldname",
  "owner": "Administrator",
  "permissions": [
   {
