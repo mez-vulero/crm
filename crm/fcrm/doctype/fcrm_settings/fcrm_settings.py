@@ -113,6 +113,7 @@ def after_migrate():
 		backfill_contact_full_name,
 		hide_company_name_from_contact_side_panel,
 		patch_contact_view_settings,
+		unescape_contract_template_html,
 		unhide_contact_full_name,
 		upgrade_real_estate_custom_fields,
 	)
@@ -121,6 +122,7 @@ def after_migrate():
 	backfill_contact_full_name()
 	unhide_contact_full_name()
 	patch_contact_view_settings()
+	unescape_contract_template_html()
 	upgrade_real_estate_custom_fields()
 
 

@@ -24,6 +24,138 @@
     <div v-else-if="title == 'Events'" class="h-full activity">
       <EventArea :doctype="doctype" :docname="docname" />
     </div>
+    <!-- Contracts Tab -->
+    <div v-else-if="title == 'Contracts'" class="px-3 pb-3 sm:px-10 sm:pb-5">
+      <!-- Contract list -->
+      <div v-if="contractsList.data?.length" class="overflow-x-auto">
+        <table class="w-full text-left">
+          <thead><tr class="text-sm text-ink-gray-5 border-b">
+            <th class="py-2 pr-4 font-medium">{{ __('Contract #') }}</th>
+            <th class="py-2 pr-4 font-medium">{{ __('Status') }}</th>
+            <th class="py-2 pr-4 font-medium">{{ __('Date') }}</th>
+            <th class="py-2 pr-4 font-medium">{{ __('Signed') }}</th>
+            <th class="py-2 pr-4 font-medium">{{ __('PDF') }}</th>
+            <th class="py-2 font-medium">{{ __('Actions') }}</th>
+          </tr></thead>
+          <tbody>
+            <tr v-for="c in contractsList.data" :key="c.name" class="border-b text-base text-ink-gray-7">
+              <td class="py-2.5 pr-4 font-medium">{{ c.name }}</td>
+              <td class="py-2.5 pr-4"><Badge :variant="'subtle'" :theme="c.status === 'Signed' ? 'green' : c.status === 'Cancelled' ? 'red' : 'blue'" :label="c.status" size="sm" /></td>
+              <td class="py-2.5 pr-4">{{ c.contract_date || '-' }}</td>
+              <td class="py-2.5 pr-4">{{ c.signed_date || '-' }}</td>
+              <td class="py-2.5 pr-4"><a v-if="c.pdf_attachment" :href="c.pdf_attachment" target="_blank" class="text-ink-blue-5 underline">{{ __('Download') }}</a><span v-else>-</span></td>
+              <td class="py-2.5"><Button v-if="c.status === 'Draft' || c.status === 'Sent'" variant="subtle" size="sm" :label="__('Mark Signed')" @click="markSigned(c.name)" /></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div v-else class="flex flex-col items-center justify-center py-10 text-ink-gray-5">
+        <ContractIcon class="h-10 w-10 mb-3" />
+        <p class="text-base">{{ __('No Contracts') }}</p>
+      </div>
+    </div>
+    <!-- Payments Tab -->
+    <div v-else-if="title == 'Payments'" class="px-3 pb-3 sm:px-10 sm:pb-5">
+      <!-- Summary bar -->
+      <div v-if="paymentSummary.data" class="grid grid-cols-4 gap-3 mb-4">
+        <div class="rounded-lg border p-3"><div class="text-sm text-ink-gray-5">{{ __('Scheduled') }}</div><div class="text-lg font-semibold">{{ fmtAmount(paymentSummary.data.total_scheduled) }}</div></div>
+        <div class="rounded-lg border p-3"><div class="text-sm text-ink-gray-5">{{ __('Collected') }}</div><div class="text-lg font-semibold text-green-600">{{ fmtAmount(paymentSummary.data.total_collected) }}</div></div>
+        <div class="rounded-lg border p-3"><div class="text-sm text-ink-gray-5">{{ __('Outstanding') }}</div><div class="text-lg font-semibold text-orange-600">{{ fmtAmount(paymentSummary.data.outstanding) }}</div></div>
+        <div class="rounded-lg border p-3"><div class="text-sm text-ink-gray-5">{{ __('Overdue') }}</div><div class="text-lg font-semibold text-red-600">{{ paymentSummary.data.overdue_count || 0 }}</div></div>
+      </div>
+      <!-- Payment Schedule -->
+      <div class="flex items-center justify-between mb-2">
+        <h4 class="text-base font-medium text-ink-gray-7">{{ __('Payment Schedule') }}</h4>
+      </div>
+      <div v-if="paymentScheduleRows.length" class="overflow-x-auto mb-6">
+        <table class="w-full text-left">
+          <thead><tr class="text-sm text-ink-gray-5 border-b">
+            <th class="py-2 pr-4 font-medium">{{ __('Milestone') }}</th>
+            <th class="py-2 pr-4 font-medium">{{ __('Due Date') }}</th>
+            <th class="py-2 pr-4 font-medium">{{ __('Amount') }}</th>
+            <th class="py-2 pr-4 font-medium">{{ __('Status') }}</th>
+            <th class="py-2 font-medium">{{ __('Payment Date') }}</th>
+          </tr></thead>
+          <tbody>
+            <tr v-for="row in paymentScheduleRows" :key="row.name" class="border-b text-base" :class="row.due_date && row.due_date < todayStr && row.status !== 'Paid' ? 'text-red-600' : 'text-ink-gray-7'">
+              <td class="py-2.5 pr-4">{{ row.milestone }}</td>
+              <td class="py-2.5 pr-4">{{ row.due_date || '-' }}</td>
+              <td class="py-2.5 pr-4">{{ fmtAmount(row.amount) }}</td>
+              <td class="py-2.5 pr-4"><Badge :variant="'subtle'" :theme="row.status === 'Paid' ? 'green' : row.status === 'Overdue' ? 'red' : 'orange'" :label="row.status" size="sm" /></td>
+              <td class="py-2.5">{{ row.payment_date || '-' }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <!-- Payment Collections -->
+      <h4 class="text-base font-medium text-ink-gray-7 mb-2">{{ __('Payment Collections') }}</h4>
+      <div v-if="paymentCollections.data?.length" class="overflow-x-auto">
+        <table class="w-full text-left">
+          <thead><tr class="text-sm text-ink-gray-5 border-b">
+            <th class="py-2 pr-4 font-medium">{{ __('Payment #') }}</th>
+            <th class="py-2 pr-4 font-medium">{{ __('Date') }}</th>
+            <th class="py-2 pr-4 font-medium">{{ __('Amount') }}</th>
+            <th class="py-2 pr-4 font-medium">{{ __('Method') }}</th>
+            <th class="py-2 pr-4 font-medium">{{ __('Status') }}</th>
+            <th class="py-2 font-medium">{{ __('Invoice') }}</th>
+          </tr></thead>
+          <tbody>
+            <tr v-for="p in paymentCollections.data" :key="p.name" class="border-b text-base text-ink-gray-7">
+              <td class="py-2.5 pr-4 font-medium">{{ p.name }}</td>
+              <td class="py-2.5 pr-4">{{ p.payment_date || '-' }}</td>
+              <td class="py-2.5 pr-4">{{ fmtAmount(p.amount_received) }}</td>
+              <td class="py-2.5 pr-4">{{ p.payment_method || '-' }}</td>
+              <td class="py-2.5 pr-4"><Badge :variant="'subtle'" :theme="p.status === 'Received' ? 'green' : p.status === 'Refunded' ? 'red' : 'orange'" :label="p.status" size="sm" /></td>
+              <td class="py-2.5"><Button v-if="!p.invoice" variant="subtle" size="sm" :label="__('Gen. Invoice')" @click="generateInvoice(p.name)" /><a v-else-if="p.invoice_pdf" :href="p.invoice_pdf" target="_blank" class="text-ink-blue-5 underline">{{ p.invoice }}</a><span v-else>{{ p.invoice }}</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div v-else class="text-center py-6 text-ink-gray-5 text-sm">{{ __('No payments recorded yet') }}</div>
+    </div>
+    <!-- Commissions Tab -->
+    <div v-else-if="title == 'Commissions'" class="px-3 pb-3 sm:px-10 sm:pb-5">
+      <!-- Commission list -->
+      <div v-if="commissionsList.data?.length" class="overflow-x-auto">
+        <table class="w-full text-left">
+          <thead><tr class="text-sm text-ink-gray-5 border-b">
+            <th class="py-2 pr-4 font-medium">{{ __('Agent') }}</th>
+            <th class="py-2 pr-4 font-medium">{{ __('Role') }}</th>
+            <th class="py-2 pr-4 font-medium">{{ __('Rate %') }}</th>
+            <th class="py-2 pr-4 font-medium">{{ __('Amount') }}</th>
+            <th class="py-2 pr-4 font-medium">{{ __('Split %') }}</th>
+            <th class="py-2 pr-4 font-medium">{{ __('Final') }}</th>
+            <th class="py-2 pr-4 font-medium">{{ __('Trigger') }}</th>
+            <th class="py-2 pr-4 font-medium">{{ __('Status') }}</th>
+            <th class="py-2 font-medium">{{ __('Actions') }}</th>
+          </tr></thead>
+          <tbody>
+            <tr v-for="cm in commissionsList.data" :key="cm.name" class="border-b text-base text-ink-gray-7">
+              <td class="py-2.5 pr-4">{{ cm.agent_name }}</td>
+              <td class="py-2.5 pr-4">{{ cm.role }}</td>
+              <td class="py-2.5 pr-4">{{ cm.commission_rate }}%</td>
+              <td class="py-2.5 pr-4">{{ fmtAmount(cm.commission_amount) }}</td>
+              <td class="py-2.5 pr-4">{{ cm.split_percentage }}%</td>
+              <td class="py-2.5 pr-4 font-medium">{{ fmtAmount(cm.final_commission) }}</td>
+              <td class="py-2.5 pr-4">{{ cm.trigger_event }}</td>
+              <td class="py-2.5 pr-4"><Badge :variant="'subtle'" :theme="cm.status === 'Approved' ? 'green' : cm.status === 'Paid' ? 'blue' : cm.status === 'Cancelled' ? 'red' : 'orange'" :label="cm.status" size="sm" /></td>
+              <td class="py-2.5"><Button v-if="cm.status === 'Pending'" variant="subtle" size="sm" :label="__('Approve')" @click="approveCommission(cm.name)" /></td>
+            </tr>
+          </tbody>
+          <tfoot>
+            <tr class="text-base font-semibold text-ink-gray-9 border-t">
+              <td class="py-2.5 pr-4" colspan="5">{{ __('Total') }}</td>
+              <td class="py-2.5 pr-4">{{ fmtAmount(commissionsList.data.reduce((s, c) => s + (c.final_commission || 0), 0)) }}</td>
+              <td colspan="3"></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+      <div v-else class="flex flex-col items-center justify-center py-10 text-ink-gray-5">
+        <CommissionIcon class="h-10 w-10 mb-3" />
+        <p class="text-base">{{ __('No Commissions') }}</p>
+      </div>
+    </div>
     <div
       v-else-if="
         activities?.length ||
@@ -114,138 +246,6 @@
           :attachments="activities"
           @reload="all_activities.reload() && scroll()"
         />
-      </div>
-      <!-- Contracts Tab -->
-      <div v-else-if="title == 'Contracts'" class="px-3 pb-3 sm:px-10 sm:pb-5">
-        <!-- Contract list -->
-        <div v-if="contractsList.data?.length" class="overflow-x-auto">
-          <table class="w-full text-left">
-            <thead><tr class="text-sm text-ink-gray-5 border-b">
-              <th class="py-2 pr-4 font-medium">{{ __('Contract #') }}</th>
-              <th class="py-2 pr-4 font-medium">{{ __('Status') }}</th>
-              <th class="py-2 pr-4 font-medium">{{ __('Date') }}</th>
-              <th class="py-2 pr-4 font-medium">{{ __('Signed') }}</th>
-              <th class="py-2 pr-4 font-medium">{{ __('PDF') }}</th>
-              <th class="py-2 font-medium">{{ __('Actions') }}</th>
-            </tr></thead>
-            <tbody>
-              <tr v-for="c in contractsList.data" :key="c.name" class="border-b text-base text-ink-gray-7">
-                <td class="py-2.5 pr-4 font-medium">{{ c.name }}</td>
-                <td class="py-2.5 pr-4"><Badge :variant="'subtle'" :theme="c.status === 'Signed' ? 'green' : c.status === 'Cancelled' ? 'red' : 'blue'" :label="c.status" size="sm" /></td>
-                <td class="py-2.5 pr-4">{{ c.contract_date || '-' }}</td>
-                <td class="py-2.5 pr-4">{{ c.signed_date || '-' }}</td>
-                <td class="py-2.5 pr-4"><a v-if="c.pdf_attachment" :href="c.pdf_attachment" target="_blank" class="text-ink-blue-5 underline">{{ __('Download') }}</a><span v-else>-</span></td>
-                <td class="py-2.5"><Button v-if="c.status === 'Draft' || c.status === 'Sent'" variant="subtle" size="sm" :label="__('Mark Signed')" @click="markSigned(c.name)" /></td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-        <div v-else class="flex flex-col items-center justify-center py-10 text-ink-gray-5">
-          <ContractIcon class="h-10 w-10 mb-3" />
-          <p class="text-base">{{ __('No Contracts') }}</p>
-        </div>
-      </div>
-      <!-- Payments Tab -->
-      <div v-else-if="title == 'Payments'" class="px-3 pb-3 sm:px-10 sm:pb-5">
-        <!-- Summary bar -->
-        <div v-if="paymentSummary.data" class="grid grid-cols-4 gap-3 mb-4">
-          <div class="rounded-lg border p-3"><div class="text-sm text-ink-gray-5">{{ __('Scheduled') }}</div><div class="text-lg font-semibold">{{ fmtAmount(paymentSummary.data.total_scheduled) }}</div></div>
-          <div class="rounded-lg border p-3"><div class="text-sm text-ink-gray-5">{{ __('Collected') }}</div><div class="text-lg font-semibold text-green-600">{{ fmtAmount(paymentSummary.data.total_collected) }}</div></div>
-          <div class="rounded-lg border p-3"><div class="text-sm text-ink-gray-5">{{ __('Outstanding') }}</div><div class="text-lg font-semibold text-orange-600">{{ fmtAmount(paymentSummary.data.outstanding) }}</div></div>
-          <div class="rounded-lg border p-3"><div class="text-sm text-ink-gray-5">{{ __('Overdue') }}</div><div class="text-lg font-semibold text-red-600">{{ paymentSummary.data.overdue_count || 0 }}</div></div>
-        </div>
-        <!-- Payment Schedule -->
-        <div class="flex items-center justify-between mb-2">
-          <h4 class="text-base font-medium text-ink-gray-7">{{ __('Payment Schedule') }}</h4>
-        </div>
-        <div v-if="paymentScheduleRows.length" class="overflow-x-auto mb-6">
-          <table class="w-full text-left">
-            <thead><tr class="text-sm text-ink-gray-5 border-b">
-              <th class="py-2 pr-4 font-medium">{{ __('Milestone') }}</th>
-              <th class="py-2 pr-4 font-medium">{{ __('Due Date') }}</th>
-              <th class="py-2 pr-4 font-medium">{{ __('Amount') }}</th>
-              <th class="py-2 pr-4 font-medium">{{ __('Status') }}</th>
-              <th class="py-2 font-medium">{{ __('Payment Date') }}</th>
-            </tr></thead>
-            <tbody>
-              <tr v-for="row in paymentScheduleRows" :key="row.name" class="border-b text-base" :class="row.due_date && row.due_date < todayStr && row.status !== 'Paid' ? 'text-red-600' : 'text-ink-gray-7'">
-                <td class="py-2.5 pr-4">{{ row.milestone }}</td>
-                <td class="py-2.5 pr-4">{{ row.due_date || '-' }}</td>
-                <td class="py-2.5 pr-4">{{ fmtAmount(row.amount) }}</td>
-                <td class="py-2.5 pr-4"><Badge :variant="'subtle'" :theme="row.status === 'Paid' ? 'green' : row.status === 'Overdue' ? 'red' : 'orange'" :label="row.status" size="sm" /></td>
-                <td class="py-2.5">{{ row.payment_date || '-' }}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-        <!-- Payment Collections -->
-        <h4 class="text-base font-medium text-ink-gray-7 mb-2">{{ __('Payment Collections') }}</h4>
-        <div v-if="paymentCollections.data?.length" class="overflow-x-auto">
-          <table class="w-full text-left">
-            <thead><tr class="text-sm text-ink-gray-5 border-b">
-              <th class="py-2 pr-4 font-medium">{{ __('Payment #') }}</th>
-              <th class="py-2 pr-4 font-medium">{{ __('Date') }}</th>
-              <th class="py-2 pr-4 font-medium">{{ __('Amount') }}</th>
-              <th class="py-2 pr-4 font-medium">{{ __('Method') }}</th>
-              <th class="py-2 pr-4 font-medium">{{ __('Status') }}</th>
-              <th class="py-2 font-medium">{{ __('Invoice') }}</th>
-            </tr></thead>
-            <tbody>
-              <tr v-for="p in paymentCollections.data" :key="p.name" class="border-b text-base text-ink-gray-7">
-                <td class="py-2.5 pr-4 font-medium">{{ p.name }}</td>
-                <td class="py-2.5 pr-4">{{ p.payment_date || '-' }}</td>
-                <td class="py-2.5 pr-4">{{ fmtAmount(p.amount_received) }}</td>
-                <td class="py-2.5 pr-4">{{ p.payment_method || '-' }}</td>
-                <td class="py-2.5 pr-4"><Badge :variant="'subtle'" :theme="p.status === 'Received' ? 'green' : p.status === 'Refunded' ? 'red' : 'orange'" :label="p.status" size="sm" /></td>
-                <td class="py-2.5"><Button v-if="!p.invoice" variant="subtle" size="sm" :label="__('Gen. Invoice')" @click="generateInvoice(p.name)" /><a v-else-if="p.invoice_pdf" :href="p.invoice_pdf" target="_blank" class="text-ink-blue-5 underline">{{ p.invoice }}</a><span v-else>{{ p.invoice }}</span></td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-        <div v-else class="text-center py-6 text-ink-gray-5 text-sm">{{ __('No payments recorded yet') }}</div>
-      </div>
-      <!-- Commissions Tab -->
-      <div v-else-if="title == 'Commissions'" class="px-3 pb-3 sm:px-10 sm:pb-5">
-        <!-- Commission list -->
-        <div v-if="commissionsList.data?.length" class="overflow-x-auto">
-          <table class="w-full text-left">
-            <thead><tr class="text-sm text-ink-gray-5 border-b">
-              <th class="py-2 pr-4 font-medium">{{ __('Agent') }}</th>
-              <th class="py-2 pr-4 font-medium">{{ __('Role') }}</th>
-              <th class="py-2 pr-4 font-medium">{{ __('Rate %') }}</th>
-              <th class="py-2 pr-4 font-medium">{{ __('Amount') }}</th>
-              <th class="py-2 pr-4 font-medium">{{ __('Split %') }}</th>
-              <th class="py-2 pr-4 font-medium">{{ __('Final') }}</th>
-              <th class="py-2 pr-4 font-medium">{{ __('Trigger') }}</th>
-              <th class="py-2 pr-4 font-medium">{{ __('Status') }}</th>
-              <th class="py-2 font-medium">{{ __('Actions') }}</th>
-            </tr></thead>
-            <tbody>
-              <tr v-for="cm in commissionsList.data" :key="cm.name" class="border-b text-base text-ink-gray-7">
-                <td class="py-2.5 pr-4">{{ cm.agent_name }}</td>
-                <td class="py-2.5 pr-4">{{ cm.role }}</td>
-                <td class="py-2.5 pr-4">{{ cm.commission_rate }}%</td>
-                <td class="py-2.5 pr-4">{{ fmtAmount(cm.commission_amount) }}</td>
-                <td class="py-2.5 pr-4">{{ cm.split_percentage }}%</td>
-                <td class="py-2.5 pr-4 font-medium">{{ fmtAmount(cm.final_commission) }}</td>
-                <td class="py-2.5 pr-4">{{ cm.trigger_event }}</td>
-                <td class="py-2.5 pr-4"><Badge :variant="'subtle'" :theme="cm.status === 'Approved' ? 'green' : cm.status === 'Paid' ? 'blue' : cm.status === 'Cancelled' ? 'red' : 'orange'" :label="cm.status" size="sm" /></td>
-                <td class="py-2.5"><Button v-if="cm.status === 'Pending'" variant="subtle" size="sm" :label="__('Approve')" @click="approveCommission(cm.name)" /></td>
-              </tr>
-            </tbody>
-            <tfoot>
-              <tr class="text-base font-semibold text-ink-gray-9 border-t">
-                <td class="py-2.5 pr-4" colspan="5">{{ __('Total') }}</td>
-                <td class="py-2.5 pr-4">{{ fmtAmount(commissionsList.data.reduce((s, c) => s + (c.final_commission || 0), 0)) }}</td>
-                <td colspan="3"></td>
-              </tr>
-            </tfoot>
-          </table>
-        </div>
-        <div v-else class="flex flex-col items-center justify-center py-10 text-ink-gray-5">
-          <CommissionIcon class="h-10 w-10 mb-3" />
-          <p class="text-base">{{ __('No Commissions') }}</p>
-        </div>
       </div>
       <template v-else>
         <div

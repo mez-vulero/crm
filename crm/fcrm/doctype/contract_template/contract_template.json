@@ -39,10 +39,11 @@
    "label": "Template Body"
   },
   {
-   "description": "Supports Jinja2 tokens: {{ buyer_name }}, {{ unit_number }}, {{ purchase_price }}, {{ contract_date }}, {{ project_name }}, {{ floor }}, {{ size_sqm }}, {{ deed_date }}",
+   "description": "Raw HTML + Jinja2 tokens. Supported: {{ buyer_name }}, {{ unit_number }}, {{ purchase_price }}, {{ contract_date }}, {{ project_name }}, {{ floor }}, {{ size_sqm }}, {{ deed_date }}, {{ project_type }}, {{ unit_type }}, {{ bedrooms }}, {{ bathrooms }}, {{ amenities }}, etc.",
    "fieldname": "body",
-   "fieldtype": "Text Editor",
+   "fieldtype": "Code",
    "label": "Body",
+   "options": "HTML",
    "reqd": 1
   },
   {
@@ -52,13 +53,15 @@
   },
   {
    "fieldname": "header_html",
-   "fieldtype": "Text Editor",
-   "label": "Header HTML"
+   "fieldtype": "Code",
+   "label": "Header HTML",
+   "options": "HTML"
   },
   {
    "fieldname": "footer_html",
-   "fieldtype": "Text Editor",
-   "label": "Footer HTML"
+   "fieldtype": "Code",
+   "label": "Footer HTML",
+   "options": "HTML"
   }
  ],
  "index_web_pages_for_search": 1,

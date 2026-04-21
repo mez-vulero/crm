@@ -32,6 +32,7 @@ def after_install(force=False):
 	hide_company_name_from_contact_side_panel()
 	backfill_contact_full_name()
 	patch_contact_view_settings()
+	unescape_contract_template_html()
 	add_real_estate_custom_fields()
 	upgrade_real_estate_custom_fields()
 	add_real_estate_financial_custom_fields()
@@ -752,6 +753,43 @@ def patch_contact_view_settings():
 			view.columns = json.dumps(columns)
 			view.rows = json.dumps(rows)
 			view.save(ignore_permissions=True)
+
+
+def unescape_contract_template_html():
+	"""When Contract Template body/header/footer were Text Editor fields, pasted
+	HTML often got HTML-escaped by the WYSIWYG editor (e.g. `<div>` stored as
+	`&lt;div&gt;`). The fields are now Code type so new content is preserved
+	verbatim, but legacy rows still hold escaped text. Decode them once.
+
+	Idempotent: a string with no HTML entities is returned unchanged by
+	html.unescape, so re-running this is safe.
+	"""
+	import html
+	import re
+
+	rows = frappe.db.sql(
+		"""SELECT name, body, header_html, footer_html
+		   FROM `tabContract Template`""",
+		as_dict=True,
+	)
+
+	# Heuristic: a value contains escaped HTML if it has &lt; or &gt; tokens
+	# without matching real `<` `>` tags. Skip rows that already look like raw HTML.
+	pattern = re.compile(r"&(lt|gt|amp|quot|#39);")
+
+	for row in rows:
+		updates = {}
+		for field in ("body", "header_html", "footer_html"):
+			value = row.get(field) or ""
+			if not value or not pattern.search(value):
+				continue
+			decoded = html.unescape(value)
+			if decoded != value:
+				updates[field] = decoded
+		if updates:
+			frappe.db.set_value(
+				"Contract Template", row.name, updates, update_modified=False
+			)
 
 
 def backfill_contact_full_name():
