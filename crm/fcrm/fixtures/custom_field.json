@@ -55,6 +55,8 @@
  {
   "doctype": "Custom Field",
   "dt": "CRM Deal",
+  "fetch_from": "re_unit.base_price",
+  "fetch_if_empty": 1,
   "fieldname": "re_purchase_price",
   "fieldtype": "Currency",
   "insert_after": "re_column_break_01",
@@ -191,12 +193,12 @@
   "doctype": "Custom Field",
   "dt": "CRM Lead",
   "fieldname": "re_preferred_unit_type",
-  "fieldtype": "Select",
+  "fieldtype": "Link",
   "insert_after": "re_interested_project",
   "label": "Preferred Unit Type",
   "module": "FCRM",
   "name": "CRM Lead-re_preferred_unit_type",
-  "options": "\nStudio\n1BR\n2BR\n3BR\n4BR\nPenthouse"
+  "options": "CRM Unit Type"
  },
  {
   "doctype": "Custom Field",

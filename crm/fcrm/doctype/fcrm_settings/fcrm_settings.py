@@ -109,6 +109,14 @@ def get_standard_dropdown_items():
 def after_migrate():
 	sync_table("dropdown_items", "standard_dropdown_items")
 
+	from crm.install import (
+		hide_company_name_from_contact_side_panel,
+		upgrade_real_estate_custom_fields,
+	)
+
+	hide_company_name_from_contact_side_panel()
+	upgrade_real_estate_custom_fields()
+
 
 def sync_table(key, hook):
 	crm_settings = FCRMSettings("FCRM Settings")

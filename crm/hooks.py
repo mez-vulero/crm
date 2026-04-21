@@ -184,7 +184,8 @@ doc_events = {
 			"crm.fcrm.doctype.crm_deal.real_estate_hooks.calculate_commission",
 		],
 		"on_update": [
-			"crm.fcrm.doctype.erpnext_crm_settings.erpnext_crm_settings.create_customer_in_erpnext"
+			"crm.fcrm.doctype.erpnext_crm_settings.erpnext_crm_settings.create_customer_in_erpnext",
+			"crm.fcrm.doctype.crm_deal.real_estate_hooks.sync_purchase_price_to_unit",
 		],
 	},
 	"User": {

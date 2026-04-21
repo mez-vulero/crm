@@ -7,16 +7,10 @@ class CustomContact(Contact):
 	def default_list_data():
 		columns = [
 			{
-				"label": "Name",
+				"label": "Full Name",
 				"type": "Data",
 				"key": "full_name",
 				"width": "17rem",
-			},
-			{
-				"label": "Email",
-				"type": "Data",
-				"key": "email_id",
-				"width": "12rem",
 			},
 			{
 				"label": "Phone",
@@ -25,9 +19,9 @@ class CustomContact(Contact):
 				"width": "12rem",
 			},
 			{
-				"label": "Organization",
+				"label": "Email",
 				"type": "Data",
-				"key": "company_name",
+				"key": "email_id",
 				"width": "12rem",
 			},
 			{
@@ -40,7 +34,6 @@ class CustomContact(Contact):
 		rows = [
 			"name",
 			"full_name",
-			"company_name",
 			"email_id",
 			"mobile_no",
 			"modified",

@@ -56,6 +56,7 @@ def get_linked_deals(contact: str):
 				"mobile_no",
 				"deal_owner",
 				"modified",
+				"re_unit",
 			],
 		)
 		deals.append(deal.as_dict())

@@ -486,13 +486,12 @@ const columns = computed(() => dealColumns)
 function getDealRowObject(deal) {
   return {
     name: deal.name,
-    organization: deal.organization,
+    re_unit: deal.re_unit || '-',
     annual_revenue: getFormattedCurrency('annual_revenue', deal),
     status: {
       label: deal.status,
       color: getDealStatus(deal.status)?.color,
     },
-    email: deal.email,
     mobile_no: deal.mobile_no,
     deal_owner: {
       label: deal.deal_owner && getUser(deal.deal_owner).full_name,
@@ -507,9 +506,9 @@ function getDealRowObject(deal) {
 
 const dealColumns = [
   {
-    label: __('Organization'),
-    key: 'organization',
-    width: '11rem',
+    label: __('Unit'),
+    key: 're_unit',
+    width: '14rem',
   },
   {
     label: __('Amount'),
@@ -521,11 +520,6 @@ const dealColumns = [
     label: __('Status'),
     key: 'status',
     width: '10rem',
-  },
-  {
-    label: __('Email'),
-    key: 'email',
-    width: '12rem',
   },
   {
     label: __('Mobile No.'),

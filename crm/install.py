@@ -29,7 +29,9 @@ def after_install(force=False):
 	create_assignment_rule_custom_fields()
 	add_assignment_rule_property_setters()
 	hide_organization_from_layouts()
+	hide_company_name_from_contact_side_panel()
 	add_real_estate_custom_fields()
+	upgrade_real_estate_custom_fields()
 	add_real_estate_financial_custom_fields()
 	add_real_estate_sidebar_sections()
 	update_real_estate_data_fields_layout()
@@ -193,7 +195,7 @@ def add_default_fields_layout(force=False):
 		},
 		"Contact-Side Panel": {
 			"doctype": "Contact",
-			"layout": '[{"label": "Details", "name": "details_section", "opened": true, "columns": [{"name": "column_eIWl", "fields": ["salutation", "first_name", "last_name", "email_id", "mobile_no", "gender", "company_name", "designation", "address"]}]}]',
+			"layout": '[{"label": "Details", "name": "details_section", "opened": true, "columns": [{"name": "column_eIWl", "fields": ["salutation", "first_name", "last_name", "email_id", "mobile_no", "gender", "designation", "address"]}]}]',
 		},
 	}
 
@@ -598,6 +600,68 @@ def hide_organization_from_layouts():
 			doc.save(ignore_permissions=True)
 
 
+def upgrade_real_estate_custom_fields():
+	"""Patch CRM Lead.re_preferred_unit_type (Select \u2192 Link) and add fetch_from on
+	CRM Deal.re_purchase_price for existing installations."""
+	lead_field = "CRM Lead-re_preferred_unit_type"
+	if frappe.db.exists("Custom Field", lead_field):
+		cf = frappe.get_doc("Custom Field", lead_field)
+		if cf.fieldtype != "Link" or cf.options != "CRM Unit Type":
+			cf.fieldtype = "Link"
+			cf.options = "CRM Unit Type"
+			cf.save(ignore_permissions=True)
+
+	deal_field = "CRM Deal-re_purchase_price"
+	if frappe.db.exists("Custom Field", deal_field):
+		cf = frappe.get_doc("Custom Field", deal_field)
+		changed = False
+		if cf.fetch_from != "re_unit.base_price":
+			cf.fetch_from = "re_unit.base_price"
+			changed = True
+		if not cf.fetch_if_empty:
+			cf.fetch_if_empty = 1
+			changed = True
+		if changed:
+			cf.save(ignore_permissions=True)
+
+
+def hide_company_name_from_contact_side_panel():
+	"""Strip company_name from the Contact Side Panel layout (idempotent)."""
+	import json
+
+	layout_name = "Contact-Side Panel"
+	if not frappe.db.exists("CRM Fields Layout", layout_name):
+		return
+
+	doc = frappe.get_doc("CRM Fields Layout", layout_name)
+	if not doc.layout:
+		return
+
+	layout = json.loads(doc.layout)
+	changed = False
+
+	for section in layout:
+		# Drop a section that exists only to hold company_name
+		if section.get("columns"):
+			all_fields = []
+			for col in section["columns"]:
+				all_fields.extend(col.get("fields", []))
+			if all_fields == ["company_name"]:
+				layout.remove(section)
+				changed = True
+				continue
+
+		for col in section.get("columns", []):
+			fields = col.get("fields", [])
+			if "company_name" in fields:
+				fields.remove("company_name")
+				changed = True
+
+	if changed:
+		doc.layout = json.dumps(layout)
+		doc.save(ignore_permissions=True)
+
+
 def add_real_estate_custom_fields():
 	if frappe.get_meta("CRM Deal").has_field("re_project"):
 		return
@@ -646,6 +710,8 @@ def add_real_estate_custom_fields():
 					"label": "Purchase Price",
 					"options": "currency",
 					"insert_after": "re_column_break_01",
+					"fetch_from": "re_unit.base_price",
+					"fetch_if_empty": 1,
 				},
 				{
 					"fieldname": "re_reservation_date",
@@ -727,9 +793,9 @@ def add_real_estate_custom_fields():
 				},
 				{
 					"fieldname": "re_preferred_unit_type",
-					"fieldtype": "Select",
+					"fieldtype": "Link",
 					"label": "Preferred Unit Type",
-					"options": "\nStudio\n1BR\n2BR\n3BR\n4BR\nPenthouse",
+					"options": "CRM Unit Type",
 					"insert_after": "re_interested_project",
 				},
 				{
