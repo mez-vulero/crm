@@ -602,14 +602,59 @@ def hide_organization_from_layouts():
 
 def upgrade_real_estate_custom_fields():
 	"""Patch CRM Lead.re_preferred_unit_type (Select \u2192 Link) and add fetch_from on
-	CRM Deal.re_purchase_price for existing installations."""
+	CRM Deal.re_purchase_price for existing installations.
+
+	Frappe forbids changing a Custom Field's fieldtype in place, so for the
+	Select \u2192 Link migration we delete and recreate the field while preserving
+	existing lead values (and backfilling matching CRM Unit Type rows).
+	"""
 	lead_field = "CRM Lead-re_preferred_unit_type"
 	if frappe.db.exists("Custom Field", lead_field):
 		cf = frappe.get_doc("Custom Field", lead_field)
 		if cf.fieldtype != "Link" or cf.options != "CRM Unit Type":
-			cf.fieldtype = "Link"
-			cf.options = "CRM Unit Type"
-			cf.save(ignore_permissions=True)
+			existing_data = frappe.db.sql(
+				"""SELECT name, re_preferred_unit_type
+				   FROM `tabCRM Lead`
+				   WHERE re_preferred_unit_type IS NOT NULL
+				     AND re_preferred_unit_type != ''""",
+				as_dict=True,
+			)
+
+			for value in {row.re_preferred_unit_type for row in existing_data}:
+				if not frappe.db.exists("CRM Unit Type", value):
+					frappe.get_doc(
+						{"doctype": "CRM Unit Type", "unit_type": value}
+					).insert(ignore_permissions=True)
+
+			insert_after = cf.insert_after
+			frappe.delete_doc(
+				"Custom Field", lead_field, ignore_permissions=True, force=True
+			)
+			frappe.clear_cache(doctype="CRM Lead")
+
+			frappe.get_doc(
+				{
+					"doctype": "Custom Field",
+					"dt": "CRM Lead",
+					"fieldname": "re_preferred_unit_type",
+					"label": "Preferred Unit Type",
+					"fieldtype": "Link",
+					"options": "CRM Unit Type",
+					"insert_after": insert_after or "re_interested_project",
+					"module": "FCRM",
+				}
+			).insert(ignore_permissions=True)
+
+			# Re-write any values that the column drop/recreate may have wiped
+			for row in existing_data:
+				if frappe.db.exists("CRM Lead", row.name):
+					frappe.db.set_value(
+						"CRM Lead",
+						row.name,
+						"re_preferred_unit_type",
+						row.re_preferred_unit_type,
+						update_modified=False,
+					)
 
 	deal_field = "CRM Deal-re_purchase_price"
 	if frappe.db.exists("Custom Field", deal_field):
