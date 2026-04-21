@@ -31,6 +31,7 @@ def after_install(force=False):
 	hide_organization_from_layouts()
 	hide_company_name_from_contact_side_panel()
 	backfill_contact_full_name()
+	patch_contact_view_settings()
 	add_real_estate_custom_fields()
 	upgrade_real_estate_custom_fields()
 	add_real_estate_financial_custom_fields()
@@ -260,6 +261,26 @@ def add_property_setter():
 		doc.property_type = "Data"
 		doc.value = "email_id"
 		doc.insert()
+
+	unhide_contact_full_name()
+
+
+def unhide_contact_full_name():
+	"""Flip the `hidden` flag off on Contact.full_name so it's pickable in the
+	list-view column chooser and not stripped by the list-view post-processor."""
+	name = "Contact-full_name-hidden"
+	if not frappe.db.exists("Property Setter", name):
+		frappe.get_doc(
+			{
+				"doctype": "Property Setter",
+				"doctype_or_field": "DocField",
+				"doc_type": "Contact",
+				"field_name": "full_name",
+				"property": "hidden",
+				"property_type": "Check",
+				"value": "0",
+			}
+		).insert(ignore_permissions=True)
 
 
 def add_email_template_custom_fields():
@@ -669,6 +690,68 @@ def upgrade_real_estate_custom_fields():
 			changed = True
 		if changed:
 			cf.save(ignore_permissions=True)
+
+
+def patch_contact_view_settings():
+	"""Update saved CRM View Settings for Contact: drop company_name, ensure
+	full_name appears as the first column. Preserves any other user customizations.
+	"""
+	import json
+
+	from frappe.contacts.doctype.contact.contact import get_full_name  # noqa: F401  (ensures module loads)
+
+	views = frappe.get_all(
+		"CRM View Settings",
+		filters={"dt": "Contact"},
+		pluck="name",
+	)
+	for view_name in views:
+		view = frappe.get_doc("CRM View Settings", view_name)
+		changed = False
+
+		try:
+			columns = json.loads(view.columns) if view.columns else []
+		except (TypeError, ValueError):
+			columns = []
+		try:
+			rows = json.loads(view.rows) if view.rows else []
+		except (TypeError, ValueError):
+			rows = []
+
+		# Drop any company_name column
+		new_columns = [c for c in columns if c.get("key") != "company_name"]
+		if len(new_columns) != len(columns):
+			changed = True
+			columns = new_columns
+
+		# Ensure full_name is the first column
+		if not any(c.get("key") == "full_name" for c in columns):
+			columns.insert(
+				0,
+				{
+					"label": "Full Name",
+					"type": "Data",
+					"key": "full_name",
+					"width": "17rem",
+				},
+			)
+			changed = True
+
+		# Sync rows: drop company_name, ensure full_name + image are present
+		if "company_name" in rows:
+			rows.remove("company_name")
+			changed = True
+		if "full_name" not in rows:
+			rows.insert(1 if "name" in rows else 0, "full_name")
+			changed = True
+		if "image" not in rows:
+			rows.append("image")
+			changed = True
+
+		if changed:
+			view.columns = json.dumps(columns)
+			view.rows = json.dumps(rows)
+			view.save(ignore_permissions=True)
 
 
 def backfill_contact_full_name():

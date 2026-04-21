@@ -112,11 +112,15 @@ def after_migrate():
 	from crm.install import (
 		backfill_contact_full_name,
 		hide_company_name_from_contact_side_panel,
+		patch_contact_view_settings,
+		unhide_contact_full_name,
 		upgrade_real_estate_custom_fields,
 	)
 
 	hide_company_name_from_contact_side_panel()
 	backfill_contact_full_name()
+	unhide_contact_full_name()
+	patch_contact_view_settings()
 	upgrade_real_estate_custom_fields()
 
 
