@@ -375,18 +375,28 @@
         <div class="text-base text-ink-gray-7">
           {{ __('Reserving unit') }}: <strong>{{ selectedUnit?.unit_number }}</strong>
         </div>
-        <FormControl
-          v-model="reservation.deal"
-          :label="__('Link to Deal (optional)')"
-          type="text"
-          :placeholder="__('Deal ID')"
-        />
-        <FormControl
-          v-model="reservation.lead"
-          :label="__('Link to Lead (optional)')"
-          type="text"
-          :placeholder="__('Lead ID')"
-        />
+        <div class="space-y-1.5">
+          <label class="block text-xs text-ink-gray-5">{{ __('Link to Deal') }}</label>
+          <Link
+            class="form-control"
+            size="md"
+            :value="reservation.deal"
+            doctype="CRM Deal"
+            :placeholder="__('Search Deal')"
+            @change="(v) => (reservation.deal = v || '')"
+          />
+        </div>
+        <div class="space-y-1.5">
+          <label class="block text-xs text-ink-gray-5">{{ __('Link to Lead') }}</label>
+          <Link
+            class="form-control"
+            size="md"
+            :value="reservation.lead"
+            doctype="CRM Lead"
+            :placeholder="__('Search Lead')"
+            @change="(v) => (reservation.lead = v || '')"
+          />
+        </div>
         <FormControl
           v-model="reservation.reservation_type"
           :label="__('Reservation Type')"
