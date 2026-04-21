@@ -110,11 +110,13 @@ def after_migrate():
 	sync_table("dropdown_items", "standard_dropdown_items")
 
 	from crm.install import (
+		backfill_contact_full_name,
 		hide_company_name_from_contact_side_panel,
 		upgrade_real_estate_custom_fields,
 	)
 
 	hide_company_name_from_contact_side_panel()
+	backfill_contact_full_name()
 	upgrade_real_estate_custom_fields()
 
 

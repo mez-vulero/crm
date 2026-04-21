@@ -30,6 +30,7 @@ def after_install(force=False):
 	add_assignment_rule_property_setters()
 	hide_organization_from_layouts()
 	hide_company_name_from_contact_side_panel()
+	backfill_contact_full_name()
 	add_real_estate_custom_fields()
 	upgrade_real_estate_custom_fields()
 	add_real_estate_financial_custom_fields()
@@ -668,6 +669,31 @@ def upgrade_real_estate_custom_fields():
 			changed = True
 		if changed:
 			cf.save(ignore_permissions=True)
+
+
+def backfill_contact_full_name():
+	"""Compute full_name for any Contact rows where it's empty.
+
+	Frappe's standard Contact controller auto-sets full_name in before_save, so
+	new contacts are always populated. This handles legacy rows that pre-date
+	that flow or were inserted directly.
+	"""
+	from frappe.contacts.doctype.contact.contact import get_full_name
+
+	rows = frappe.db.sql(
+		"""SELECT name, first_name, middle_name, last_name, company_name
+		   FROM `tabContact`
+		   WHERE full_name IS NULL OR full_name = ''""",
+		as_dict=True,
+	)
+	for row in rows:
+		full_name = get_full_name(
+			row.first_name, row.middle_name, row.last_name, row.company_name
+		)
+		if full_name:
+			frappe.db.set_value(
+				"Contact", row.name, "full_name", full_name, update_modified=False
+			)
 
 
 def hide_company_name_from_contact_side_panel():

@@ -487,7 +487,9 @@ function getDealRowObject(deal) {
   return {
     name: deal.name,
     re_unit: deal.re_unit || '-',
-    annual_revenue: getFormattedCurrency('annual_revenue', deal),
+    re_purchase_price: deal.re_purchase_price
+      ? getFormattedCurrency('re_purchase_price', deal)
+      : '-',
     status: {
       label: deal.status,
       color: getDealStatus(deal.status)?.color,
@@ -512,7 +514,7 @@ const dealColumns = [
   },
   {
     label: __('Amount'),
-    key: 'annual_revenue',
+    key: 're_purchase_price',
     align: 'right',
     width: '9rem',
   },
