@@ -16,6 +16,33 @@ class PropertyInvoice(Document):
 			deal = frappe.get_doc("CRM Deal", self.deal)
 			self.db_set("buyer_name", deal.get("first_name") or "", update_modified=False)
 			self.db_set("buyer_email", deal.get("email") or "", update_modified=False)
+		self._auto_create_line_item()
+
+	def _auto_create_line_item(self):
+		if self.get("line_items"):
+			return
+		if not self.payment_collection:
+			return
+		try:
+			pc = frappe.get_doc("Payment Collection", self.payment_collection)
+		except frappe.DoesNotExistError:
+			return
+
+		description = pc.get("milestone_description") or _("Payment for {0}").format(
+			pc.get("deal") or self.deal or ""
+		)
+		amount = pc.get("amount_received") or pc.get("scheduled_amount") or 0
+		if not amount:
+			return
+
+		self.append("line_items", {
+			"description": description,
+			"quantity": 1,
+			"unit_price": amount,
+			"amount": amount,
+		})
+		self.calculate_totals()
+		self.save(ignore_permissions=True)
 
 	def calculate_totals(self):
 		self.subtotal = sum((item.quantity or 0) * (item.unit_price or 0) for item in self.get("line_items", []))

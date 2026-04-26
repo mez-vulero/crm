@@ -113,6 +113,12 @@ const routes = [
     component: () => import('@/pages/Commissions.vue'),
   },
   {
+    alias: '/viewings',
+    path: '/viewings/view/:viewType?',
+    name: 'Viewings',
+    component: () => import('@/pages/Viewings.vue'),
+  },
+  {
     path: '/welcome',
     name: 'Welcome',
     component: () => import('@/pages/Welcome.vue'),

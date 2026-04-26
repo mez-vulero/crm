@@ -12,6 +12,7 @@
     @generateContract="showContractDialog = true"
     @recordPayment="showPaymentDialog = true"
     @addCommission="showCommissionDialog = true"
+    @scheduleViewing="showViewingDialog = true"
   />
   <FadedScrollableDiv class="flex flex-col h-full overflow-y-auto">
     <div
@@ -66,6 +67,14 @@
       <!-- Payment Schedule -->
       <div class="flex items-center justify-between mb-2">
         <h4 class="text-base font-medium text-ink-gray-7">{{ __('Payment Schedule') }}</h4>
+        <Button
+          v-if="paymentScheduleRows.length && scheduleDirty"
+          variant="solid"
+          size="sm"
+          :label="__('Save Schedule')"
+          :loading="savingSchedule"
+          @click="savePaymentSchedule"
+        />
       </div>
       <div v-if="paymentScheduleRows.length" class="overflow-x-auto mb-6">
         <table class="w-full text-left">
@@ -78,9 +87,30 @@
           </tr></thead>
           <tbody>
             <tr v-for="row in paymentScheduleRows" :key="row.name" class="border-b text-base" :class="row.due_date && row.due_date < todayStr && row.status !== 'Paid' ? 'text-red-600' : 'text-ink-gray-7'">
-              <td class="py-2.5 pr-4">{{ row.milestone }}</td>
-              <td class="py-2.5 pr-4">{{ row.due_date || '-' }}</td>
-              <td class="py-2.5 pr-4">{{ fmtAmount(row.amount) }}</td>
+              <td class="py-2.5 pr-4">
+                <input
+                  v-model="row.milestone"
+                  type="text"
+                  class="w-full bg-transparent border-b border-transparent hover:border-ink-gray-3 focus:border-ink-blue-5 outline-none px-1 py-0.5"
+                  @input="markScheduleDirty"
+                />
+              </td>
+              <td class="py-2.5 pr-4">
+                <input
+                  v-model="row.due_date"
+                  type="date"
+                  class="w-full bg-transparent border-b border-transparent hover:border-ink-gray-3 focus:border-ink-blue-5 outline-none px-1 py-0.5"
+                  @input="markScheduleDirty"
+                />
+              </td>
+              <td class="py-2.5 pr-4">
+                <input
+                  v-model.number="row.amount"
+                  type="number"
+                  class="w-32 bg-transparent border-b border-transparent hover:border-ink-gray-3 focus:border-ink-blue-5 outline-none px-1 py-0.5 text-right"
+                  @input="markScheduleDirty"
+                />
+              </td>
               <td class="py-2.5 pr-4"><Badge :variant="'subtle'" :theme="row.status === 'Paid' ? 'green' : row.status === 'Overdue' ? 'red' : 'orange'" :label="row.status" size="sm" /></td>
               <td class="py-2.5">{{ row.payment_date || '-' }}</td>
             </tr>
@@ -154,6 +184,47 @@
       <div v-else class="flex flex-col items-center justify-center py-10 text-ink-gray-5">
         <CommissionIcon class="h-10 w-10 mb-3" />
         <p class="text-base">{{ __('No Commissions') }}</p>
+      </div>
+    </div>
+    <!-- Viewings Tab -->
+    <div v-else-if="title == 'Viewings'" class="px-3 pb-3 sm:px-10 sm:pb-5">
+      <div v-if="viewingsList.data?.length" class="overflow-x-auto">
+        <table class="w-full text-left">
+          <thead><tr class="text-sm text-ink-gray-5 border-b">
+            <th class="py-2 pr-4 font-medium">{{ __('Date') }}</th>
+            <th class="py-2 pr-4 font-medium">{{ __('Time') }}</th>
+            <th class="py-2 pr-4 font-medium">{{ __('Status') }}</th>
+            <th class="py-2 pr-4 font-medium">{{ __('Agent') }}</th>
+            <th class="py-2 pr-4 font-medium">{{ __('Project') }}</th>
+            <th class="py-2 pr-4 font-medium">{{ __('Unit') }}</th>
+            <th class="py-2 pr-4 font-medium">{{ __('Feedback') }}</th>
+            <th class="py-2 font-medium">{{ __('Actions') }}</th>
+          </tr></thead>
+          <tbody>
+            <tr v-for="v in viewingsList.data" :key="v.name" class="border-b text-base text-ink-gray-7">
+              <td class="py-2.5 pr-4">{{ v.appointment_date || '-' }}</td>
+              <td class="py-2.5 pr-4">{{ v.appointment_time || '-' }}</td>
+              <td class="py-2.5 pr-4">
+                <Badge :variant="'subtle'" :theme="v.status === 'Completed' ? 'green' : v.status === 'No-Show' ? 'red' : v.status === 'Cancelled' ? 'gray' : 'orange'" :label="v.status" size="sm" />
+              </td>
+              <td class="py-2.5 pr-4">{{ v.assigned_agent || '-' }}</td>
+              <td class="py-2.5 pr-4">{{ v.project || '-' }}</td>
+              <td class="py-2.5 pr-4">{{ v.unit || '-' }}</td>
+              <td class="py-2.5 pr-4 max-w-[12rem] truncate">{{ v.feedback || '-' }}</td>
+              <td class="py-2.5">
+                <div v-if="v.status === 'Scheduled'" class="flex gap-1">
+                  <Button variant="subtle" size="sm" :label="__('Complete')" @click="updateViewingStatus(v.name, 'Completed')" />
+                  <Button variant="ghost" size="sm" :label="__('No-Show')" @click="updateViewingStatus(v.name, 'No-Show')" />
+                  <Button variant="ghost" size="sm" :label="__('Cancel')" @click="updateViewingStatus(v.name, 'Cancelled')" />
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div v-else class="flex flex-col items-center justify-center py-10 text-ink-gray-5">
+        <CalendarIcon class="h-10 w-10 mb-3" />
+        <p class="text-base">{{ __('No Viewing Appointments') }}</p>
       </div>
     </div>
     <div
@@ -626,6 +697,24 @@
       <Button variant="solid" :label="__('Add')" @click="addCommission" />
     </template>
   </Dialog>
+  <!-- Schedule Viewing Dialog -->
+  <Dialog v-model="showViewingDialog" :options="{ title: __('Schedule Viewing'), size: 'lg' }">
+    <template #body-content>
+      <div class="flex flex-col gap-4">
+        <div class="grid grid-cols-2 gap-4">
+          <FormControl v-model="viewingForm.appointment_date" :label="__('Date')" type="date" required />
+          <FormControl v-model="viewingForm.appointment_time" :label="__('Time')" type="time" />
+        </div>
+        <FormControl v-model="viewingForm.project" :label="__('Project')" type="text" :placeholder="__('Real Estate Project ID')" />
+        <FormControl v-model="viewingForm.unit" :label="__('Unit')" type="text" :placeholder="__('Property Unit ID')" />
+        <FormControl v-model="viewingForm.assigned_agent" :label="__('Assigned Agent (User ID)')" type="text" :placeholder="__('user@example.com')" />
+        <FormControl v-model="viewingForm.notes" :label="__('Notes')" type="textarea" :placeholder="__('Any additional notes...')" />
+      </div>
+    </template>
+    <template #actions>
+      <Button variant="solid" :label="__('Schedule')" @click="scheduleViewing" />
+    </template>
+  </Dialog>
 </template>
 <script setup>
 import ActivityHeader from '@/components/Activities/ActivityHeader.vue'
@@ -729,6 +818,45 @@ function fmtAmount(val) {
 }
 
 const todayStr = new Date().toISOString().split('T')[0]
+
+// Inline-editable payment schedule
+const scheduleDirty = ref(false)
+const savingSchedule = ref(false)
+
+function markScheduleDirty() {
+  scheduleDirty.value = true
+}
+
+async function savePaymentSchedule() {
+  if (!paymentScheduleRows.value.length) return
+  savingSchedule.value = true
+  try {
+    const dealDoc = await call('frappe.client.get_doc', {
+      doctype: 'CRM Deal',
+      name: props.docname,
+    })
+    dealDoc.re_payment_schedule = paymentScheduleRows.value.map((r) => ({
+      ...r,
+      amount: r.amount || 0,
+    }))
+    await call('frappe.client.set_value', {
+      doctype: 'CRM Deal',
+      name: props.docname,
+      fieldname: 're_payment_schedule',
+      value: dealDoc.re_payment_schedule,
+    }).catch(async () => {
+      // Fallback: full doc save if set_value can't accept child rows
+      await call('frappe.client.save', { doc: dealDoc })
+    })
+    scheduleDirty.value = false
+    paymentSummary.reload()
+    toast.success(__('Payment schedule saved'))
+  } catch (err) {
+    toast.error(err.messages?.[0] || __('Failed to save payment schedule'))
+  } finally {
+    savingSchedule.value = false
+  }
+}
 
 // Contracts resources
 const contractsList = createResource({
@@ -922,6 +1050,68 @@ async function approveCommission(name) {
   }
 }
 
+// Viewings resources
+const viewingsList = createResource({
+  url: 'crm.fcrm.doctype.viewing_appointment.viewing_appointment.get_appointments',
+  makeParams() {
+    const params = {}
+    if (props.doctype === 'CRM Lead') params.lead = props.docname
+    else if (props.doctype === 'CRM Deal') params.deal = props.docname
+    return params
+  },
+  auto: false,
+})
+
+const showViewingDialog = ref(false)
+const viewingForm = ref({
+  appointment_date: '',
+  appointment_time: '',
+  project: '',
+  unit: '',
+  assigned_agent: '',
+  notes: '',
+})
+
+async function scheduleViewing() {
+  if (!viewingForm.value.appointment_date) {
+    toast.error(__('Date is required'))
+    return
+  }
+  try {
+    const params = {
+      appointment_date: viewingForm.value.appointment_date,
+      appointment_time: viewingForm.value.appointment_time || undefined,
+      project: viewingForm.value.project || undefined,
+      unit: viewingForm.value.unit || undefined,
+      assigned_agent: viewingForm.value.assigned_agent || undefined,
+      notes: viewingForm.value.notes || undefined,
+    }
+    if (props.doctype === 'CRM Lead') params.lead = props.docname
+    else if (props.doctype === 'CRM Deal') params.deal = props.docname
+
+    await call('crm.fcrm.doctype.viewing_appointment.viewing_appointment.schedule_viewing', params)
+    showViewingDialog.value = false
+    viewingForm.value = { appointment_date: '', appointment_time: '', project: '', unit: '', assigned_agent: '', notes: '' }
+    viewingsList.reload()
+    toast.success(__('Viewing scheduled'))
+  } catch (err) {
+    toast.error(err.messages?.[0] || __('Error scheduling viewing'))
+  }
+}
+
+async function updateViewingStatus(name, status) {
+  try {
+    await call('crm.fcrm.doctype.viewing_appointment.viewing_appointment.update_status', {
+      appointment_name: name,
+      status: status,
+    })
+    viewingsList.reload()
+    toast.success(__('Status updated'))
+  } catch (err) {
+    toast.error(err.messages?.[0] || __('Error'))
+  }
+}
+
 const reload_email = ref(false)
 const modalRef = ref(null)
 const showFilesUploader = ref(false)
@@ -938,6 +1128,7 @@ watch(
       if (!paymentSummary.data) paymentSummary.fetch()
     }
     if (newTitle === 'Commissions' && !commissionsList.data) commissionsList.fetch()
+    if (newTitle === 'Viewings' && !viewingsList.data) viewingsList.fetch()
   },
 )
 

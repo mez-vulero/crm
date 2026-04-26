@@ -89,6 +89,13 @@
       iconLeft="plus"
       @click="emit('addCommission')"
     />
+    <Button
+      v-else-if="title == 'Viewings'"
+      variant="solid"
+      :label="__('Schedule Viewing')"
+      iconLeft="plus"
+      @click="emit('scheduleViewing')"
+    />
     <Dropdown v-else :options="defaultActions" @click.stop>
       <template #default="{ open }">
         <Button
@@ -125,7 +132,7 @@ const props = defineProps({
   whatsappBox: { type: Object, default: () => ({}) },
 })
 
-const emit = defineEmits(['generateContract', 'recordPayment', 'addCommission'])
+const emit = defineEmits(['generateContract', 'recordPayment', 'addCommission', 'scheduleViewing'])
 
 const { makeCall } = globalStore()
 

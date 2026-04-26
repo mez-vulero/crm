@@ -97,6 +97,44 @@
         </template>
       </SidebarLink>
       <SidebarLink
+        v-if="websprixEnabled && queueId"
+        :label="queueLabel"
+        :isCollapsed="isSidebarCollapsed"
+        :class="{ 'pointer-events-none opacity-60': queueLoading }"
+        @click="onQueueClick"
+      >
+        <template #icon>
+          <div class="relative inline-flex h-4 w-4 items-center justify-center">
+            <LoadingIndicator
+              v-if="queueLoading"
+              class="h-4 w-4 text-ink-gray-7"
+            />
+            <template v-else>
+              <FeatherIcon
+                :name="queueJoined ? 'log-out' : 'log-in'"
+                class="h-4 w-4"
+              />
+              <span
+                class="pointer-events-none absolute -right-1 -top-1 h-2 w-2 rounded-full ring-2 ring-surface-menu-bar"
+                :class="
+                  queueJoined
+                    ? 'bg-green-500 shadow-[0_0_4px_rgba(34,197,94,0.6)]'
+                    : 'bg-amber-500'
+                "
+              />
+            </template>
+          </div>
+        </template>
+        <template v-if="!isSidebarCollapsed" #right>
+          <Badge
+            :label="queueJoined ? __('Online') : __('Offline')"
+            :theme="queueJoined ? 'green' : 'gray'"
+            variant="subtle"
+            size="sm"
+          />
+        </template>
+      </SidebarLink>
+      <SidebarLink
         v-if="isOnboardingStepsCompleted"
         :label="__('Help')"
         :isCollapsed="isSidebarCollapsed"
@@ -149,6 +187,7 @@
 
 <script setup>
 import BrushCleaningIcon from '~icons/lucide/brush-cleaning'
+import LucideEye from '~icons/lucide/eye'
 import LucideLayoutDashboard from '~icons/lucide/layout-dashboard'
 import CRMLogo from '@/components/Icons/CRMLogo.vue'
 import InviteIcon from '@/components/Icons/InviteIcon.vue'
@@ -182,9 +221,20 @@ import {
 } from '@/stores/notifications'
 import { usersStore } from '@/stores/users'
 import { sessionStore } from '@/stores/session'
-import { showSettings, activeSettingsPage } from '@/composables/settings'
+import {
+  showSettings,
+  activeSettingsPage,
+  websprixEnabled,
+} from '@/composables/settings'
+import {
+  queueJoined,
+  queueId,
+  queueLoading,
+  toggleQueue,
+} from '@/stores/websprix_queue'
+import LoadingIndicator from '@/components/Icons/LoadingIndicator.vue'
 import { showChangePasswordModal } from '@/composables/modals'
-import { FeatherIcon, call } from 'frappe-ui'
+import { FeatherIcon, call, toast } from 'frappe-ui'
 import {
   SignupBanner,
   TrialBanner,
@@ -205,6 +255,32 @@ const { getPinnedViews, getPublicViews } = viewsStore()
 const { toggle: toggleNotificationPanel } = notificationsStore()
 const { capture } = useTelemetry()
 const { clearDemoData, isDemoDataCreated } = useDemoData()
+
+function onQueueClick() {
+  if (queueLoading.value) return
+  if (!websprixEnabled.value) {
+    toast.error(
+      __('WebSprix integration is disabled. Enable it in Settings → Telephony.'),
+    )
+    return
+  }
+  if (!queueId.value) {
+    toast.error(
+      __(
+        'No WebSprix Queue ID configured for your account. Set one in Settings → Telephony.',
+      ),
+    )
+    return
+  }
+  toggleQueue()
+}
+
+const queueLabel = computed(() => {
+  if (queueLoading.value) {
+    return queueJoined.value ? __('Leaving...') : __('Joining...')
+  }
+  return queueJoined.value ? __('Leave Queue') : __('Join Queue')
+})
 
 const isSidebarCollapsed = useStorage('isSidebarCollapsed', false)
 
@@ -241,6 +317,11 @@ const links = [
     label: 'Commissions',
     icon: CommissionIcon,
     to: 'Commissions',
+  },
+  {
+    label: 'Viewings',
+    icon: LucideEye,
+    to: 'Viewings',
   },
   {
     label: 'Notes',

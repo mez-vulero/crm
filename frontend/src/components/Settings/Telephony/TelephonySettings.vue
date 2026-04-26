@@ -46,11 +46,7 @@
             v-model="telephonyAgent.doc.default_medium"
             type="select"
             class="w-44 p-1"
-            :options="[
-              { label: __(''), value: '' },
-              { label: __('Twilio'), value: 'Twilio' },
-              { label: __('Exotel'), value: 'Exotel' },
-            ]"
+            :options="defaultMediumOptions"
             :placeholder="__('Select Medium')"
           />
           <Button
@@ -138,6 +134,72 @@
       </div>
 
       <div
+        v-if="websprixEnabled"
+        class="h-px border-t mx-2 border-outline-gray-modals"
+      />
+      <div
+        v-if="websprixEnabled"
+        class="flex items-center justify-between gap-8 py-3 pl-2 pr-1"
+      >
+        <div class="flex flex-col">
+          <div class="text-p-base font-medium text-ink-gray-7 truncate">
+            {{ __('WebSprix Enabled') }}
+          </div>
+          <div class="text-p-sm text-ink-gray-5">
+            {{ __('Enable the WebSprix SIP client for this user') }}
+          </div>
+        </div>
+        <div>
+          <FormControl
+            v-model="telephonyAgent.doc.websprix"
+            type="checkbox"
+          />
+        </div>
+      </div>
+      <div
+        v-if="websprixEnabled && telephonyAgent.doc.websprix"
+        class="flex items-center justify-between gap-8 py-3 pl-2 pr-1"
+      >
+        <div class="flex flex-col">
+          <div class="text-p-base font-medium text-ink-gray-7 truncate">
+            {{ __('WebSprix Number') }}
+          </div>
+          <div class="text-p-sm text-ink-gray-5">
+            {{ __('Your SIP extension assigned by WebSprix') }}
+          </div>
+        </div>
+        <div>
+          <FormControl
+            v-model="telephonyAgent.doc.websprix_number"
+            class="flex-1 truncate w-44 p-1"
+            :placeholder="__('e.g. 835267')"
+            placement="bottom-end"
+          />
+        </div>
+      </div>
+      <div
+        v-if="websprixEnabled && telephonyAgent.doc.websprix"
+        class="flex items-center justify-between gap-8 py-3 pl-2 pr-1"
+      >
+        <div class="flex flex-col">
+          <div class="text-p-base font-medium text-ink-gray-7 truncate">
+            {{ __('WebSprix Queue ID') }}
+          </div>
+          <div class="text-p-sm text-ink-gray-5">
+            {{ __('Queue identifier for inbound call routing') }}
+          </div>
+        </div>
+        <div>
+          <FormControl
+            v-model="telephonyAgent.doc.websprix_queue_id"
+            class="flex-1 truncate w-44 p-1"
+            :placeholder="__('e.g. Q1234S1234')"
+            placement="bottom-end"
+          />
+        </div>
+      </div>
+
+      <div
         v-if="isManager()"
         class="flex items-center justify-between text-lg text-ink-gray-8 font-semibold mt-4 py-3 px-2"
       >
@@ -188,6 +250,31 @@
           @click="emit('updateStep', 'exotel-settings')"
         />
       </div>
+
+      <div
+        v-if="isManager()"
+        class="h-px border-t mx-2 border-outline-gray-modals"
+      />
+
+      <div
+        v-if="isManager()"
+        class="flex items-center justify-between py-3 px-2"
+      >
+        <div class="flex flex-col gap-1">
+          <span class="text-base font-medium text-ink-gray-8">
+            {{ __('WebSprix') }}
+          </span>
+          <span class="text-p-sm text-ink-gray-6">
+            {{
+              __('Configure your WebSprix SIP Telephony Integration Settings here')
+            }}
+          </span>
+        </div>
+        <Button
+          :label="__('Configure')"
+          @click="emit('updateStep', 'websprix-settings')"
+        />
+      </div>
     </div>
     <ErrorMessage
       :message="isNewDoc ? insertResource.error : telephonyAgent.save?.error"
@@ -203,7 +290,11 @@ import {
   createResource,
   toast,
 } from 'frappe-ui'
-import { twilioEnabled, exotelEnabled } from '@/composables/settings'
+import {
+  twilioEnabled,
+  exotelEnabled,
+  websprixEnabled,
+} from '@/composables/settings'
 import { useDocument } from '@/data/document'
 import { usersStore } from '@/stores/users'
 import { ref, computed } from 'vue'
@@ -264,5 +355,14 @@ const isDirty = computed(() => {
     JSON.stringify(telephonyAgent.doc) !==
       JSON.stringify(telephonyAgent.originalDoc)
   )
+})
+
+const defaultMediumOptions = computed(() => {
+  const options = [{ label: __(''), value: '' }]
+  if (twilioEnabled.value) options.push({ label: __('Twilio'), value: 'Twilio' })
+  if (exotelEnabled.value) options.push({ label: __('Exotel'), value: 'Exotel' })
+  if (websprixEnabled.value)
+    options.push({ label: __('WebSprix'), value: 'WebSprix' })
+  return options
 })
 </script>

@@ -157,11 +157,69 @@
         </div>
       </div>
 
+      <!-- Bulk action bar -->
+      <div
+        v-if="selectedUnits.length"
+        class="flex items-center gap-3 border-b bg-surface-blue-1 px-5 py-2"
+      >
+        <span class="text-sm text-ink-gray-7">
+          {{ selectedUnits.length }} {{ __('selected') }}
+        </span>
+        <FormControl
+          v-model="bulkStatus"
+          type="select"
+          :options="[
+            { label: __('Set status...'), value: '' },
+            { label: __('Available'), value: 'Available' },
+            { label: __('Reserved'), value: 'Reserved' },
+            { label: __('Sold'), value: 'Sold' },
+            { label: __('Hold'), value: 'Hold' },
+            { label: __('Blocked'), value: 'Blocked' },
+          ]"
+          class="w-40"
+        />
+        <Button
+          variant="solid"
+          size="sm"
+          :label="__('Apply Status')"
+          :loading="applyingBulkStatus"
+          :disabled="!bulkStatus"
+          @click="applyBulkStatus"
+        />
+        <FormControl
+          v-model="bulkPrice"
+          type="number"
+          :placeholder="__('Set price override')"
+          class="w-44"
+        />
+        <Button
+          variant="outline"
+          size="sm"
+          :label="__('Apply Price')"
+          :loading="applyingBulkPrice"
+          :disabled="!bulkPrice"
+          @click="applyBulkPrice"
+        />
+        <Button
+          variant="ghost"
+          size="sm"
+          :label="__('Clear')"
+          @click="clearSelection"
+        />
+      </div>
+
       <!-- Unit Grid -->
       <div class="flex-1 overflow-y-auto">
         <table class="w-full">
           <thead class="sticky top-0 bg-surface-white">
             <tr class="text-left text-sm text-ink-gray-5">
+              <th class="px-3 py-2 font-medium">
+                <input
+                  type="checkbox"
+                  :checked="allSelected"
+                  @change="toggleAllSelection"
+                />
+              </th>
               <th class="px-5 py-2 font-medium">{{ __('Unit') }}</th>
               <th class="px-3 py-2 font-medium">{{ __('Floor') }}</th>
               <th class="px-3 py-2 font-medium">{{ __('Type') }}</th>
@@ -180,6 +238,13 @@
               class="cursor-pointer border-t hover:bg-surface-gray-2 transition-colors"
               @click="selectUnit(unit)"
             >
+              <td class="px-3 py-2.5" @click.stop>
+                <input
+                  type="checkbox"
+                  :checked="selectedUnits.includes(unit.name)"
+                  @change="toggleUnitSelection(unit.name)"
+                />
+              </td>
               <td class="px-5 py-2.5 text-base font-medium text-ink-gray-9">
                 {{ unit.unit_number }}
               </td>
@@ -356,11 +421,77 @@
       </div>
     </template>
     <template #actions>
+      <div class="flex gap-2">
+        <Button
+          variant="outline"
+          :label="__('Schedule Viewing')"
+          @click="showViewingDialog = true"
+        />
+        <Button
+          v-if="selectedUnit?.status === 'Available'"
+          variant="solid"
+          :label="__('Reserve Unit')"
+          @click="showReserveDialog = true"
+        />
+      </div>
+    </template>
+  </Dialog>
+
+  <!-- Schedule Viewing Dialog -->
+  <Dialog
+    v-model="showViewingDialog"
+    :options="{ title: __('Schedule Viewing'), size: 'lg' }"
+  >
+    <template #body-content>
+      <div class="flex flex-col gap-4">
+        <div class="text-base text-ink-gray-7">
+          {{ __('Viewing for unit') }}:
+          <strong>{{ selectedUnit?.unit_number }}</strong>
+        </div>
+        <div class="grid grid-cols-2 gap-4">
+          <FormControl
+            v-model="viewingData.appointment_date"
+            :label="__('Date')"
+            type="date"
+            required
+          />
+          <FormControl
+            v-model="viewingData.appointment_time"
+            :label="__('Time')"
+            type="time"
+          />
+        </div>
+        <FormControl
+          v-model="viewingData.lead"
+          :label="__('Link to Lead (optional)')"
+          type="text"
+          :placeholder="__('Lead ID')"
+        />
+        <FormControl
+          v-model="viewingData.deal"
+          :label="__('Link to Deal (optional)')"
+          type="text"
+          :placeholder="__('Deal ID')"
+        />
+        <FormControl
+          v-model="viewingData.assigned_agent"
+          :label="__('Assigned Agent (optional)')"
+          type="text"
+          :placeholder="__('user@example.com')"
+        />
+        <FormControl
+          v-model="viewingData.notes"
+          :label="__('Notes')"
+          type="textarea"
+        />
+      </div>
+    </template>
+    <template #actions>
       <Button
-        v-if="selectedUnit?.status === 'Available'"
         variant="solid"
-        :label="__('Reserve Unit')"
-        @click="showReserveDialog = true"
+        :label="__('Schedule')"
+        :loading="schedulingViewing"
+        @click="scheduleViewing"
       />
     </template>
   </Dialog>
@@ -709,6 +840,88 @@ function selectUnit(unit) {
   showUnitDetail.value = true
 }
 
+// Bulk operations
+const selectedUnits = ref([])
+const bulkStatus = ref('')
+const bulkPrice = ref('')
+const applyingBulkStatus = ref(false)
+const applyingBulkPrice = ref(false)
+
+const allSelected = computed(
+  () =>
+    filteredUnits.value.length > 0 &&
+    selectedUnits.value.length === filteredUnits.value.length,
+)
+
+function toggleAllSelection() {
+  if (allSelected.value) {
+    selectedUnits.value = []
+  } else {
+    selectedUnits.value = filteredUnits.value.map((u) => u.name)
+  }
+}
+
+function toggleUnitSelection(name) {
+  const idx = selectedUnits.value.indexOf(name)
+  if (idx >= 0) selectedUnits.value.splice(idx, 1)
+  else selectedUnits.value.push(name)
+}
+
+function clearSelection() {
+  selectedUnits.value = []
+  bulkStatus.value = ''
+  bulkPrice.value = ''
+}
+
+async function applyBulkStatus() {
+  if (!bulkStatus.value || !selectedUnits.value.length) return
+  applyingBulkStatus.value = true
+  try {
+    const result = await call(
+      'crm.fcrm.doctype.property_unit.property_unit.bulk_update_status',
+      {
+        unit_names: JSON.stringify(selectedUnits.value),
+        status: bulkStatus.value,
+      },
+    )
+    toast.success(
+      __('{0} units updated', [result.updated]) +
+        (result.failed?.length ? ` (${result.failed.length} failed)` : ''),
+    )
+    clearSelection()
+    units.reload()
+    project.reload()
+  } catch (err) {
+    toast.error(err.messages?.[0] || __('Bulk status update failed'))
+  } finally {
+    applyingBulkStatus.value = false
+  }
+}
+
+async function applyBulkPrice() {
+  if (!bulkPrice.value || !selectedUnits.value.length) return
+  applyingBulkPrice.value = true
+  try {
+    const result = await call(
+      'crm.fcrm.doctype.property_unit.property_unit.bulk_update_price',
+      {
+        unit_names: JSON.stringify(selectedUnits.value),
+        price: bulkPrice.value,
+      },
+    )
+    toast.success(
+      __('{0} units updated', [result.updated]) +
+        (result.failed?.length ? ` (${result.failed.length} failed)` : ''),
+    )
+    clearSelection()
+    units.reload()
+  } catch (err) {
+    toast.error(err.messages?.[0] || __('Bulk price update failed'))
+  } finally {
+    applyingBulkPrice.value = false
+  }
+}
+
 // Reservation
 const showReserveDialog = ref(false)
 const reserving = ref(false)
@@ -743,6 +956,55 @@ async function reserveUnit() {
     toast.error(err.messages?.[0] || __('Error reserving unit'))
   } finally {
     reserving.value = false
+  }
+}
+
+// Viewing Appointment
+const showViewingDialog = ref(false)
+const schedulingViewing = ref(false)
+const viewingData = reactive({
+  appointment_date: '',
+  appointment_time: '',
+  lead: '',
+  deal: '',
+  assigned_agent: '',
+  notes: '',
+})
+
+async function scheduleViewing() {
+  if (!viewingData.appointment_date) {
+    toast.error(__('Date is required'))
+    return
+  }
+  schedulingViewing.value = true
+  try {
+    await call(
+      'crm.fcrm.doctype.viewing_appointment.viewing_appointment.schedule_viewing',
+      {
+        appointment_date: viewingData.appointment_date,
+        appointment_time: viewingData.appointment_time || undefined,
+        project: props.projectId,
+        unit: selectedUnit.value?.name,
+        lead: viewingData.lead || undefined,
+        deal: viewingData.deal || undefined,
+        assigned_agent: viewingData.assigned_agent || undefined,
+        notes: viewingData.notes || undefined,
+      },
+    )
+    toast.success(__('Viewing scheduled'))
+    showViewingDialog.value = false
+    Object.assign(viewingData, {
+      appointment_date: '',
+      appointment_time: '',
+      lead: '',
+      deal: '',
+      assigned_agent: '',
+      notes: '',
+    })
+  } catch (err) {
+    toast.error(err.messages?.[0] || __('Error scheduling viewing'))
+  } finally {
+    schedulingViewing.value = false
   }
 }
 

@@ -213,8 +213,12 @@ class CRMLead(Document):
 		return contact.name
 
 	def create_organization(self, existing_organization=None):
-		# Organization creation skipped — not used in real estate CRM context
-		return existing_organization or self.organization or None
+		# Organization creation skipped — not used in real estate CRM context.
+		# Validate any existing reference so we never propagate a dangling link.
+		candidate = existing_organization or self.organization
+		if candidate and not frappe.db.exists("CRM Organization", candidate):
+			return None
+		return candidate or None
 
 	def update_lead_contact(self, contact):
 		contact = frappe.get_cached_doc("Contact", contact)
@@ -260,6 +264,7 @@ class CRMLead(Document):
 
 		lead_deal_map = {
 			"lead_owner": "deal_owner",
+			"re_interested_project": "re_project",
 		}
 
 		restricted_fieldtypes = [

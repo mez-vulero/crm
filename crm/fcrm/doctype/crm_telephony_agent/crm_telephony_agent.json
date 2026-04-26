@@ -16,6 +16,11 @@
   "call_receiving_device",
   "column_break_aydj",
   "exotel_number",
+  "section_break_websprix",
+  "websprix",
+  "websprix_number",
+  "column_break_websprix",
+  "websprix_queue_id",
   "section_break_phlq",
   "phone_nos"
  ],
@@ -82,7 +87,36 @@
    "fieldname": "default_medium",
    "fieldtype": "Select",
    "label": "Default Medium",
-   "options": "\nTwilio\nExotel"
+   "options": "\nTwilio\nExotel\nWebSprix"
+  },
+  {
+   "fieldname": "section_break_websprix",
+   "fieldtype": "Section Break",
+   "label": "WebSprix"
+  },
+  {
+   "default": "0",
+   "fieldname": "websprix",
+   "fieldtype": "Check",
+   "label": "WebSprix Enabled"
+  },
+  {
+   "depends_on": "websprix",
+   "fieldname": "websprix_number",
+   "fieldtype": "Data",
+   "label": "WebSprix Number",
+   "mandatory_depends_on": "websprix"
+  },
+  {
+   "fieldname": "column_break_websprix",
+   "fieldtype": "Column Break"
+  },
+  {
+   "depends_on": "websprix",
+   "fieldname": "websprix_queue_id",
+   "fieldtype": "Data",
+   "label": "WebSprix Queue ID",
+   "mandatory_depends_on": "websprix"
   },
   {
    "default": "Computer",

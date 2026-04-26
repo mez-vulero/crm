@@ -251,6 +251,7 @@ import IndicatorIcon from '@/components/Icons/IndicatorIcon.vue'
 import CameraIcon from '@/components/Icons/CameraIcon.vue'
 import LinkIcon from '@/components/Icons/LinkIcon.vue'
 import AttachmentIcon from '@/components/Icons/AttachmentIcon.vue'
+import CalendarIcon from '@/components/Icons/CalendarIcon.vue'
 import LostReasonModal from '@/components/Modals/LostReasonModal.vue'
 import LayoutHeader from '@/components/LayoutHeader.vue'
 import Activities from '@/components/Activities/Activities.vue'
@@ -442,6 +443,11 @@ const tabs = computed(() => {
       icon: AttachmentIcon,
     },
     {
+      name: 'Viewings',
+      label: __('Viewings'),
+      icon: CalendarIcon,
+    },
+    {
       name: 'WhatsApp',
       label: __('WhatsApp'),
       icon: WhatsAppIcon,
@@ -458,7 +464,40 @@ const sections = createResource({
   cache: ['sidePanelSections', 'CRM Lead'],
   params: { doctype: 'CRM Lead' },
   auto: true,
+  transform: (_sections) => filterHiddenSidebarFields(_sections),
 })
+
+function filterHiddenSidebarFields(_sections) {
+  const hiddenFields = [
+    'organization',
+    'organization_name',
+    'website',
+    'territory',
+    'annual_revenue',
+    'no_of_employees',
+    'industry',
+  ]
+  return (_sections || [])
+    .map((section) => {
+      if (!section.columns) return section
+      section.columns = section.columns.map((column) => {
+        column.fields = (column.fields || []).filter((f) => {
+          const fname = typeof f === 'string' ? f : f.fieldname || f.name
+          return !hiddenFields.includes(fname)
+        })
+        return column
+      })
+      return section
+    })
+    .filter((section) => {
+      if (section.contacts !== undefined) return true
+      const fieldCount = (section.columns || []).reduce(
+        (sum, col) => sum + (col.fields?.length || 0),
+        0,
+      )
+      return fieldCount > 0
+    })
+}
 
 async function triggerStatusChange(value) {
   await triggerOnChange('status', value)

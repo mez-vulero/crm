@@ -118,6 +118,15 @@ const tabs = createResource({
   params: { doctype: 'CRM Deal', type: 'Quick Entry' },
   auto: true,
   transform: (_tabs) => {
+    const hiddenFields = [
+      'organization',
+      'organization_name',
+      'website',
+      'territory',
+      'annual_revenue',
+      'no_of_employees',
+      'industry',
+    ]
     return _tabs.forEach((tab) => {
       tab.sections.forEach((section) => {
         section.columns.forEach((column) => {
@@ -128,6 +137,10 @@ const tabs = createResource({
           ) {
             hasContactSections.value = true
           }
+          column.fields = column.fields.filter((field) => {
+            const fname = typeof field === 'string' ? field : field.fieldname
+            return !hiddenFields.includes(fname)
+          })
           column.fields.forEach((field) => {
             if (field.fieldname == 'status') {
               field.fieldtype = 'Select'

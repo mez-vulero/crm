@@ -328,6 +328,37 @@ const sections = createResource({
   cache: ['sidePanelSections', 'CRM Lead'],
   params: { doctype: 'CRM Lead' },
   auto: true,
+  transform: (_sections) => {
+    const hiddenFields = [
+      'organization',
+      'organization_name',
+      'website',
+      'territory',
+      'annual_revenue',
+      'no_of_employees',
+      'industry',
+    ]
+    return (_sections || [])
+      .map((section) => {
+        if (!section.columns) return section
+        section.columns = section.columns.map((column) => {
+          column.fields = (column.fields || []).filter((f) => {
+            const fname = typeof f === 'string' ? f : f.fieldname || f.name
+            return !hiddenFields.includes(fname)
+          })
+          return column
+        })
+        return section
+      })
+      .filter((section) => {
+        if (section.contacts !== undefined) return true
+        const fieldCount = (section.columns || []).reduce(
+          (sum, col) => sum + (col.fields?.length || 0),
+          0,
+        )
+        return fieldCount > 0
+      })
+  },
 })
 
 function updateField(name, value) {

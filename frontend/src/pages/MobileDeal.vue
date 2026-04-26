@@ -486,23 +486,35 @@ const sections = createResource({
 })
 
 function getParsedFields(sections) {
-  sections.forEach((section) => {
-    if (section.name == 'contacts_section') return
-    section.columns[0].fields.forEach((field) => {
-      if (field.name == 'organization') {
-        field.create = (value, close) => {
-          _organization.value.organization_name = value
-          showOrganizationModal.value = true
-          close()
-        }
-        field.link = (org) =>
-          router.push({
-            name: 'Organization',
-            params: { organizationId: org },
-          })
-      }
+  const hiddenFields = [
+    'organization',
+    'organization_name',
+    'website',
+    'territory',
+    'annual_revenue',
+    'no_of_employees',
+    'industry',
+  ]
+  sections = (sections || [])
+    .map((section) => {
+      if (!section.columns) return section
+      section.columns = section.columns.map((column) => {
+        column.fields = (column.fields || []).filter((f) => {
+          const fname = typeof f === 'string' ? f : f.fieldname || f.name
+          return !hiddenFields.includes(fname)
+        })
+        return column
+      })
+      return section
     })
-  })
+    .filter((section) => {
+      if (section.contacts !== undefined) return true
+      const fieldCount = (section.columns || []).reduce(
+        (sum, col) => sum + (col.fields?.length || 0),
+        0,
+      )
+      return fieldCount > 0
+    })
   return sections
 }
 

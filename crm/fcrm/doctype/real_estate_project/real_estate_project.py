@@ -112,3 +112,66 @@ def get_unit_summary(project: str) -> dict:
 		"blocked": sum(1 for u in units if u.status == "Blocked"),
 	}
 	return summary
+
+
+@frappe.whitelist()
+def get_real_estate_dashboard() -> dict:
+	if not frappe.has_permission("Real Estate Project", "read"):
+		frappe.throw(_("Not permitted"), frappe.PermissionError)
+
+	unit_rows = frappe.db.sql(
+		"""SELECT status, COUNT(*) AS cnt FROM `tabProperty Unit` GROUP BY status""",
+		as_dict=True,
+	)
+	unit_funnel = {r.status or "Unknown": r.cnt for r in unit_rows}
+
+	scheduled = frappe.db.sql(
+		"""SELECT COALESCE(SUM(amount), 0)
+		FROM `tabPayment Schedule`
+		WHERE parenttype = 'CRM Deal'"""
+	)[0][0]
+
+	collected = frappe.db.sql(
+		"""SELECT COALESCE(SUM(amount_received), 0)
+		FROM `tabPayment Collection`
+		WHERE status != 'Refunded'"""
+	)[0][0]
+
+	outstanding = (scheduled or 0) - (collected or 0)
+
+	today = frappe.utils.today()
+	overdue_rows = frappe.db.sql(
+		"""SELECT COUNT(*) AS cnt, COALESCE(SUM(amount), 0) AS amt
+		FROM `tabPayment Schedule`
+		WHERE parenttype = 'CRM Deal'
+		AND due_date < %s AND status != 'Paid'""",
+		today,
+		as_dict=True,
+	)
+	overdue = {
+		"count": overdue_rows[0].cnt if overdue_rows else 0,
+		"amount": overdue_rows[0].amt if overdue_rows else 0,
+	}
+
+	commission_rows = frappe.db.sql(
+		"""SELECT status, COALESCE(SUM(final_commission), 0) AS amt
+		FROM `tabSales Commission`
+		GROUP BY status""",
+		as_dict=True,
+	)
+	commissions = {r.status or "Unknown": r.amt for r in commission_rows}
+
+	return {
+		"unit_funnel": unit_funnel,
+		"revenue": {
+			"scheduled": scheduled or 0,
+			"collected": collected or 0,
+			"outstanding": outstanding,
+		},
+		"overdue": overdue,
+		"commissions": {
+			"pending": commissions.get("Pending", 0),
+			"approved": commissions.get("Approved", 0),
+			"paid": commissions.get("Paid", 0),
+		},
+	}

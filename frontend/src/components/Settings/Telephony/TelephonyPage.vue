@@ -11,11 +11,16 @@
     v-else-if="step === 'exotel-settings'"
     @updateStep="updateStep"
   />
+  <WebsprixSettings
+    v-else-if="step === 'websprix-settings'"
+    @updateStep="updateStep"
+  />
 </template>
 <script setup>
 import TelephonySettings from './TelephonySettings.vue'
 import ExotelSettings from './ExotelSettings.vue'
 import TwilioSettings from './TwilioSettings.vue'
+import WebsprixSettings from './WebsprixSettings.vue'
 import { ref } from 'vue'
 
 const step = ref('telephony-settings')

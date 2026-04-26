@@ -9,6 +9,14 @@
         :actions="callLogsListView.customListActions"
       />
       <Button
+        v-if="websprixEnabled"
+        :label="syncing ? __('Syncing...') : __('Sync from WebSprix')"
+        iconLeft="refresh-cw"
+        :loading="syncing"
+        :disabled="syncing"
+        @click="syncWebsprixCallLogs"
+      />
+      <Button
         variant="solid"
         :label="__('Create')"
         iconLeft="plus"
@@ -77,11 +85,44 @@ import EmptyState from '@/components/ListViews/EmptyState.vue'
 import CallLogDetailModal from '@/components/Modals/CallLogDetailModal.vue'
 import CallLogModal from '@/components/Modals/CallLogModal.vue'
 import { getCallLogDetail } from '@/utils/callLog'
-import { createResource } from 'frappe-ui'
+import { websprixEnabled } from '@/composables/settings'
+import { call, createResource, toast } from 'frappe-ui'
 import { computed, ref, onMounted } from 'vue'
 
 const callLogsListView = ref(null)
 const showCallLogModal = ref(false)
+const syncing = ref(false)
+
+async function syncWebsprixCallLogs() {
+  if (syncing.value) return
+  syncing.value = true
+  try {
+    const res = await call('crm.integrations.websprix.api.fetch_all_call_logs')
+    const failures = ['incoming', 'outgoing', 'missed']
+      .filter((k) => res?.[k]?.status === 'error')
+      .map((k) => {
+        const detail = res[k]?.details || res[k]?.message || __('unknown error')
+        return `${k}: ${detail}`
+      })
+    const successes = ['incoming', 'outgoing', 'missed'].filter(
+      (k) => res?.[k]?.status === 'success',
+    )
+
+    if (failures.length) {
+      toast.error(__('Sync errors — {0}', [failures.join(' | ')]), {
+        duration: 8000,
+      })
+    }
+    if (successes.length) {
+      toast.success(__('Synced: {0}', [successes.join(', ')]))
+    }
+    callLogs.value?.reload?.()
+  } catch (e) {
+    toast.error(e?.messages?.[0] || e?.message || __('Sync failed'))
+  } finally {
+    syncing.value = false
+  }
+}
 
 // callLogs data is loaded in the ViewControls component
 const callLogs = ref({})

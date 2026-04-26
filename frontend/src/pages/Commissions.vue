@@ -4,14 +4,50 @@
       <Breadcrumbs :items="[{ label: __('Commissions') }]" />
     </template>
     <template #right-header>
-      <FormControl
-        v-if="isManager"
-        v-model="selectedAgent"
-        type="select"
-        :options="agentOptions"
-        class="w-56"
-        @change="loadData"
-      />
+      <div class="flex items-center gap-2">
+        <FormControl
+          v-model="filters.status"
+          type="select"
+          :options="[
+            { label: __('All Statuses'), value: '' },
+            { label: __('Pending'), value: 'Pending' },
+            { label: __('Approved'), value: 'Approved' },
+            { label: __('Paid'), value: 'Paid' },
+            { label: __('Cancelled'), value: 'Cancelled' },
+          ]"
+          class="w-40"
+          @change="loadData"
+        />
+        <FormControl
+          v-model="filters.from_date"
+          type="date"
+          :placeholder="__('From')"
+          class="w-40"
+          @change="loadData"
+        />
+        <FormControl
+          v-model="filters.to_date"
+          type="date"
+          :placeholder="__('To')"
+          class="w-40"
+          @change="loadData"
+        />
+        <FormControl
+          v-if="isManager"
+          v-model="selectedAgent"
+          type="select"
+          :options="agentOptions"
+          class="w-56"
+          @change="loadData"
+        />
+        <Button
+          v-if="filters.status || filters.from_date || filters.to_date"
+          variant="ghost"
+          size="sm"
+          :label="__('Clear')"
+          @click="clearFilters"
+        />
+      </div>
     </template>
   </LayoutHeader>
   <div class="flex flex-col overflow-y-auto p-5">
@@ -89,7 +125,7 @@
 import LayoutHeader from '@/components/LayoutHeader.vue'
 import CommissionIcon from '@/components/Icons/CommissionIcon.vue'
 import { sessionStore } from '@/stores/session'
-import { Badge, Breadcrumbs, FormControl, call, toast } from 'frappe-ui'
+import { Badge, Breadcrumbs, Button, FormControl, call, toast } from 'frappe-ui'
 import { ref, reactive, computed, onMounted } from 'vue'
 
 const { user } = sessionStore()
@@ -102,6 +138,19 @@ const summary = reactive({
   paid: 0,
   records: [],
 })
+
+const filters = reactive({
+  status: '',
+  from_date: '',
+  to_date: '',
+})
+
+function clearFilters() {
+  filters.status = ''
+  filters.from_date = ''
+  filters.to_date = ''
+  loadData()
+}
 
 const agentOptions = ref([])
 
@@ -144,12 +193,20 @@ async function loadData() {
   try {
     const data = await call(
       'crm.fcrm.doctype.sales_commission.sales_commission.get_agent_commission_summary',
-      { agent: selectedAgent.value || undefined },
+      {
+        agent: selectedAgent.value || undefined,
+        from_date: filters.from_date || undefined,
+        to_date: filters.to_date || undefined,
+      },
     )
     summary.pending = data.pending || 0
     summary.approved = data.approved || 0
     summary.paid = data.paid || 0
-    summary.records = data.records || []
+    let records = data.records || []
+    if (filters.status) {
+      records = records.filter((r) => r.status === filters.status)
+    }
+    summary.records = records
   } catch (err) {
     toast.error(err.messages?.[0] || __('Error loading commissions'))
   }

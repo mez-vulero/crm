@@ -68,9 +68,57 @@
  {
   "doctype": "Custom Field",
   "dt": "CRM Deal",
+  "fieldname": "re_total_collected",
+  "fieldtype": "Currency",
+  "insert_after": "re_purchase_price",
+  "label": "Total Collected",
+  "module": "FCRM",
+  "name": "CRM Deal-re_total_collected",
+  "options": "currency",
+  "read_only": 1
+ },
+ {
+  "doctype": "Custom Field",
+  "dt": "CRM Deal",
+  "fieldname": "re_outstanding_amount",
+  "fieldtype": "Currency",
+  "insert_after": "re_total_collected",
+  "label": "Outstanding Amount",
+  "module": "FCRM",
+  "name": "CRM Deal-re_outstanding_amount",
+  "options": "currency",
+  "read_only": 1
+ },
+ {
+  "doctype": "Custom Field",
+  "dt": "CRM Deal",
+  "fieldname": "re_payment_status",
+  "fieldtype": "Select",
+  "insert_after": "re_outstanding_amount",
+  "label": "Payment Status",
+  "module": "FCRM",
+  "name": "CRM Deal-re_payment_status",
+  "options": "Not Started\nIn Progress\nFully Paid\nOverdue",
+  "read_only": 1
+ },
+ {
+  "doctype": "Custom Field",
+  "dt": "CRM Deal",
+  "fieldname": "re_total_commission",
+  "fieldtype": "Currency",
+  "insert_after": "re_payment_status",
+  "label": "Total Commission",
+  "module": "FCRM",
+  "name": "CRM Deal-re_total_commission",
+  "options": "currency",
+  "read_only": 1
+ },
+ {
+  "doctype": "Custom Field",
+  "dt": "CRM Deal",
   "fieldname": "re_reservation_date",
   "fieldtype": "Date",
-  "insert_after": "re_purchase_price",
+  "insert_after": "re_total_commission",
   "label": "Reservation Date",
   "module": "FCRM",
   "name": "CRM Deal-re_reservation_date"

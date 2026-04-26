@@ -12,6 +12,49 @@
       />
     </template>
   </LayoutHeader>
+  <div
+    v-if="dashboard.data"
+    class="grid grid-cols-2 gap-3 px-3 pt-3 sm:grid-cols-4"
+  >
+    <div class="rounded border p-3">
+      <div class="text-xs text-ink-gray-5">{{ __('Unit Inventory') }}</div>
+      <div class="mt-1 text-lg font-semibold">
+        {{ totalUnits }} {{ __('units') }}
+      </div>
+      <div class="mt-1 flex flex-wrap gap-x-3 text-xs text-ink-gray-7">
+        <span>{{ __('Avail') }}: {{ dashboard.data.unit_funnel?.Available || 0 }}</span>
+        <span>{{ __('Resv') }}: {{ dashboard.data.unit_funnel?.Reserved || 0 }}</span>
+        <span>{{ __('Sold') }}: {{ dashboard.data.unit_funnel?.Sold || 0 }}</span>
+      </div>
+    </div>
+    <div class="rounded border p-3">
+      <div class="text-xs text-ink-gray-5">{{ __('Revenue Collection') }}</div>
+      <div class="mt-1 text-lg font-semibold">
+        {{ formatCurrency(dashboard.data.revenue?.collected) }}
+      </div>
+      <div class="mt-1 text-xs text-ink-gray-7">
+        {{ __('Outstanding') }}: {{ formatCurrency(dashboard.data.revenue?.outstanding) }}
+      </div>
+    </div>
+    <div class="rounded border p-3">
+      <div class="text-xs text-ink-gray-5">{{ __('Overdue Payments') }}</div>
+      <div class="mt-1 text-lg font-semibold text-ink-red-3">
+        {{ dashboard.data.overdue?.count || 0 }}
+      </div>
+      <div class="mt-1 text-xs text-ink-gray-7">
+        {{ formatCurrency(dashboard.data.overdue?.amount) }}
+      </div>
+    </div>
+    <div class="rounded border p-3">
+      <div class="text-xs text-ink-gray-5">{{ __('Commissions Payable') }}</div>
+      <div class="mt-1 text-lg font-semibold">
+        {{ formatCurrency(dashboard.data.commissions?.approved) }}
+      </div>
+      <div class="mt-1 text-xs text-ink-gray-7">
+        {{ __('Pending') }}: {{ formatCurrency(dashboard.data.commissions?.pending) }}
+      </div>
+    </div>
+  </div>
   <ViewControls
     ref="viewControls"
     v-model="projects"
@@ -107,7 +150,7 @@ import ViewControls from '@/components/ViewControls.vue'
 import EmptyState from '@/components/ListViews/EmptyState.vue'
 import { getMeta } from '@/stores/meta'
 import { formatDate, timeAgo } from '@/utils'
-import { Dialog, FormControl, call, toast } from 'frappe-ui'
+import { Dialog, FormControl, call, createResource, toast } from 'frappe-ui'
 import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 
@@ -123,6 +166,27 @@ const viewControls = ref(null)
 
 const showCreateDialog = ref(false)
 const creating = ref(false)
+
+const dashboard = createResource({
+  url: 'crm.fcrm.doctype.real_estate_project.real_estate_project.get_real_estate_dashboard',
+  auto: true,
+})
+
+const totalUnits = computed(() => {
+  const f = dashboard.data?.unit_funnel || {}
+  return Object.values(f).reduce((s, n) => s + (n || 0), 0)
+})
+
+function formatCurrency(value) {
+  if (!value) return '0'
+  try {
+    return new Intl.NumberFormat(undefined, {
+      maximumFractionDigits: 0,
+    }).format(value)
+  } catch {
+    return String(value)
+  }
+}
 const newProject = ref({
   project_name: '',
   status: 'Active',

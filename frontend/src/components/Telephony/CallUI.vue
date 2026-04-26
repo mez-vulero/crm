@@ -1,6 +1,7 @@
 <template>
-  <TwilioCallUI ref="twilio" />
-  <ExotelCallUI ref="exotel" />
+  <TwilioCallUI v-if="twilioEnabled" ref="twilio" />
+  <ExotelCallUI v-if="exotelEnabled" ref="exotel" />
+  <WebsprixCallUI v-if="websprixEnabled" ref="websprix" />
   <Dialog
     v-model="show"
     :options="{
@@ -25,7 +26,7 @@
           v-model="callMedium"
           type="select"
           :label="__('Calling Medium')"
-          :options="['Twilio', 'Exotel']"
+          :options="enabledMediums"
         />
         <div class="flex flex-col gap-1">
           <FormControl
@@ -47,19 +48,22 @@
 <script setup>
 import TwilioCallUI from '@/components/Telephony/TwilioCallUI.vue'
 import ExotelCallUI from '@/components/Telephony/ExotelCallUI.vue'
+import WebsprixCallUI from '@/components/Telephony/WebsprixCallUI.vue'
 import {
   twilioEnabled,
   exotelEnabled,
+  websprixEnabled,
   defaultCallingMedium,
 } from '@/composables/settings'
 import { globalStore } from '@/stores/global'
 import { FormControl, call, toast } from 'frappe-ui'
-import { nextTick, ref, watch } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 
 const { setMakeCall } = globalStore()
 
 const twilio = ref(null)
 const exotel = ref(null)
+const websprix = ref(null)
 
 const callMedium = ref('Twilio')
 const isDefaultMedium = ref(false)
@@ -67,18 +71,38 @@ const isDefaultMedium = ref(false)
 const show = ref(false)
 const mobileNumber = ref('')
 
+const enabledMediums = computed(() => {
+  const mediums = []
+  if (twilioEnabled.value) mediums.push('Twilio')
+  if (exotelEnabled.value) mediums.push('Exotel')
+  if (websprixEnabled.value) mediums.push('WebSprix')
+  return mediums
+})
+
+function pickFirstEnabled() {
+  if (twilioEnabled.value) return 'Twilio'
+  if (exotelEnabled.value) return 'Exotel'
+  if (websprixEnabled.value) return 'WebSprix'
+  return ''
+}
+
+function countEnabled() {
+  return (
+    (twilioEnabled.value ? 1 : 0) +
+    (exotelEnabled.value ? 1 : 0) +
+    (websprixEnabled.value ? 1 : 0)
+  )
+}
+
 function makeCall(number) {
-  if (
-    twilioEnabled.value &&
-    exotelEnabled.value &&
-    !defaultCallingMedium.value
-  ) {
+  if (countEnabled() > 1 && !defaultCallingMedium.value) {
+    callMedium.value = pickFirstEnabled()
     mobileNumber.value = number
     show.value = true
     return
   }
 
-  callMedium.value = twilioEnabled.value ? 'Twilio' : 'Exotel'
+  callMedium.value = pickFirstEnabled()
   if (defaultCallingMedium.value) {
     callMedium.value = defaultCallingMedium.value
   }
@@ -93,11 +117,11 @@ function makeCallUsing() {
   }
 
   if (callMedium.value === 'Twilio') {
-    twilio.value.makeOutgoingCall(mobileNumber.value)
-  }
-
-  if (callMedium.value === 'Exotel') {
-    exotel.value.makeOutgoingCall(mobileNumber.value)
+    twilio.value?.makeOutgoingCall(mobileNumber.value)
+  } else if (callMedium.value === 'Exotel') {
+    exotel.value?.makeOutgoingCall(mobileNumber.value)
+  } else if (callMedium.value === 'WebSprix') {
+    websprix.value?.makeOutgoingCall(mobileNumber.value)
   }
   show.value = false
 }
@@ -114,21 +138,15 @@ async function setDefaultCallingMedium() {
 }
 
 watch(
-  [twilioEnabled, exotelEnabled],
-  ([twilioValue, exotelValue]) =>
+  [twilioEnabled, exotelEnabled, websprixEnabled],
+  ([twilioValue, exotelValue, websprixValue]) =>
     nextTick(() => {
-      if (twilioValue) {
-        twilio.value.setup()
-        callMedium.value = 'Twilio'
-      }
+      if (twilioValue) twilio.value?.setup()
+      if (exotelValue) exotel.value?.setup()
+      if (websprixValue) websprix.value?.setup()
 
-      if (exotelValue) {
-        exotel.value.setup()
-        callMedium.value = 'Exotel'
-      }
-
-      if (twilioValue || exotelValue) {
-        callMedium.value = 'Twilio'
+      if (twilioValue || exotelValue || websprixValue) {
+        callMedium.value = pickFirstEnabled()
         setMakeCall(makeCall)
       }
     }),

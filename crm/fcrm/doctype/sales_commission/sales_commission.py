@@ -8,6 +8,23 @@ class SalesCommission(Document):
 		self.fetch_commission_base()
 		self.calculate_commission()
 		self.validate_split_percentage()
+		self.warn_if_deal_not_won()
+
+	def warn_if_deal_not_won(self):
+		if not self.deal:
+			return
+		deal_status = frappe.db.get_value("CRM Deal", self.deal, "deal_status")
+		if not deal_status:
+			return
+		status_type = frappe.db.get_value("CRM Deal Status", deal_status, "status_type")
+		if status_type != "Won":
+			frappe.msgprint(
+				_("Deal {0} is not in a Won status (current: {1}). Commission may be premature.").format(
+					self.deal, deal_status
+				),
+				indicator="orange",
+				alert=True,
+			)
 
 	def fetch_commission_base(self):
 		if self.deal and not self.commission_base:
@@ -53,7 +70,9 @@ class SalesCommission(Document):
 			WHERE deal = %s AND status IN ('Approved', 'Paid')""",
 			self.deal,
 		)[0][0]
-		frappe.db.set_value("CRM Deal", self.deal, "re_total_commission", total)
+		deal = frappe.get_doc("CRM Deal", self.deal)
+		deal.re_total_commission = total
+		deal.save(ignore_permissions=True)
 
 	@staticmethod
 	def default_list_data():
@@ -79,21 +98,11 @@ def approve_commission(commission_name: str) -> None:
 	if not frappe.has_permission("Sales Commission", "write", commission_name):
 		frappe.throw(_("Not permitted"), frappe.PermissionError)
 
-	frappe.db.set_value("Sales Commission", commission_name, {
-		"status": "Approved",
-		"approved_by": frappe.session.user,
-		"approved_date": frappe.utils.today(),
-	})
-
-	deal = frappe.db.get_value("Sales Commission", commission_name, "deal")
-	if deal:
-		total = frappe.db.sql(
-			"""SELECT COALESCE(SUM(final_commission), 0)
-			FROM `tabSales Commission`
-			WHERE deal = %s AND status IN ('Approved', 'Paid')""",
-			deal,
-		)[0][0]
-		frappe.db.set_value("CRM Deal", deal, "re_total_commission", total)
+	commission = frappe.get_doc("Sales Commission", commission_name)
+	commission.status = "Approved"
+	commission.approved_by = frappe.session.user
+	commission.approved_date = frappe.utils.today()
+	commission.save(ignore_permissions=True)
 
 
 @frappe.whitelist()

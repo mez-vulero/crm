@@ -4,14 +4,51 @@ from frappe.model.document import Document
 
 
 class PaymentCollection(Document):
-	def on_update(self):
-		self.update_payment_schedule_row()
-		self.update_deal_totals()
+	def validate(self):
+		self._warn_if_already_paid()
 
-	def update_payment_schedule_row(self):
+	def _warn_if_already_paid(self):
 		if not self.payment_schedule_row or not self.deal:
 			return
+		existing = frappe.db.sql(
+			"""SELECT name FROM `tabPayment Collection`
+			WHERE deal = %s AND payment_schedule_row = %s
+			AND status != 'Refunded' AND name != %s""",
+			(self.deal, self.payment_schedule_row, self.name or ""),
+		)
+		if existing:
+			frappe.msgprint(
+				_("A payment already exists for this schedule milestone ({0}).").format(
+					self.milestone_description or self.payment_schedule_row
+				),
+				indicator="orange",
+				alert=True,
+			)
+
+	def on_update(self):
+		if not self.deal:
+			return
+		if (
+			not self.has_value_changed("amount_received")
+			and not self.has_value_changed("status")
+			and not self.has_value_changed("payment_schedule_row")
+		):
+			return
 		deal = frappe.get_doc("CRM Deal", self.deal)
+		self._update_payment_schedule_row(deal)
+		self._update_deal_totals(deal)
+		deal.save(ignore_permissions=True)
+
+	def on_trash(self):
+		if not self.deal:
+			return
+		deal = frappe.get_doc("CRM Deal", self.deal)
+		self._update_deal_totals(deal)
+		deal.save(ignore_permissions=True)
+
+	def _update_payment_schedule_row(self, deal):
+		if not self.payment_schedule_row:
+			return
 		for row in deal.get("re_payment_schedule", []):
 			if row.name == self.payment_schedule_row:
 				if self.amount_received >= (self.scheduled_amount or 0):
@@ -20,11 +57,8 @@ class PaymentCollection(Document):
 					row.status = "Pending"
 				row.payment_date = self.payment_date
 				break
-		deal.save(ignore_permissions=True)
 
-	def update_deal_totals(self):
-		if not self.deal:
-			return
+	def _update_deal_totals(self, deal):
 		total_collected = frappe.db.sql(
 			"""SELECT COALESCE(SUM(amount_received), 0)
 			FROM `tabPayment Collection`
@@ -32,7 +66,7 @@ class PaymentCollection(Document):
 			self.deal,
 		)[0][0]
 
-		purchase_price = frappe.db.get_value("CRM Deal", self.deal, "re_purchase_price") or 0
+		purchase_price = deal.get("re_purchase_price") or 0
 		outstanding = purchase_price - total_collected
 
 		if total_collected <= 0:
@@ -49,11 +83,9 @@ class PaymentCollection(Document):
 			)[0][0]
 			payment_status = "Overdue" if overdue else "In Progress"
 
-		frappe.db.set_value("CRM Deal", self.deal, {
-			"re_total_collected": total_collected,
-			"re_outstanding_amount": outstanding,
-			"re_payment_status": payment_status,
-		})
+		deal.re_total_collected = total_collected
+		deal.re_outstanding_amount = outstanding
+		deal.re_payment_status = payment_status
 
 	@staticmethod
 	def default_list_data():

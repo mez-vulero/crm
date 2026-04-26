@@ -25,6 +25,64 @@ class PropertyUnit(Document):
 
 
 @frappe.whitelist()
+def bulk_update_status(unit_names: list[str] | str, status: str) -> dict:
+	if not frappe.has_permission("Property Unit", "write"):
+		frappe.throw(_("Not permitted"), frappe.PermissionError)
+
+	if isinstance(unit_names, str):
+		import json
+		unit_names = json.loads(unit_names)
+
+	allowed = {"Available", "Reserved", "Sold", "Hold", "Blocked"}
+	if status not in allowed:
+		frappe.throw(_("Invalid status: {0}").format(status))
+
+	updated = 0
+	failed = []
+	for name in unit_names:
+		try:
+			doc = frappe.get_doc("Property Unit", name)
+			doc.status = status
+			doc.save()
+			updated += 1
+		except Exception as exc:
+			failed.append({"name": name, "error": str(exc)})
+
+	return {"updated": updated, "failed": failed}
+
+
+@frappe.whitelist()
+def bulk_update_price(unit_names: list[str] | str, price: float) -> dict:
+	if not frappe.has_permission("Property Unit", "write"):
+		frappe.throw(_("Not permitted"), frappe.PermissionError)
+
+	if isinstance(unit_names, str):
+		import json
+		unit_names = json.loads(unit_names)
+
+	try:
+		price = float(price)
+	except (TypeError, ValueError):
+		frappe.throw(_("Invalid price"))
+
+	if price < 0:
+		frappe.throw(_("Price cannot be negative"))
+
+	updated = 0
+	failed = []
+	for name in unit_names:
+		try:
+			doc = frappe.get_doc("Property Unit", name)
+			doc.price_override = price
+			doc.save()
+			updated += 1
+		except Exception as exc:
+			failed.append({"name": name, "error": str(exc)})
+
+	return {"updated": updated, "failed": failed}
+
+
+@frappe.whitelist()
 def get_available_units(project: str, unit_type: str | None = None) -> list[dict]:
 	if not frappe.has_permission("Property Unit", "read"):
 		frappe.throw(_("Not permitted"), frappe.PermissionError)
