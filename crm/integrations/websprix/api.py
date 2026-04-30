@@ -114,7 +114,15 @@ def get_user_settings():
 	try:
 		resp = requests.get(url, headers=_get_headers(), timeout=10)
 		if resp.status_code in [200, 201]:
-			return resp.json()
+			payload = resp.json() or {}
+			# The PBX response doesn't echo the SIP username (we passed it in
+			# the URL), but the sip.js client needs it both for the From URI
+			# and for the digest-auth username. Inject it from the agent's
+			# websprix_number so the frontend destructure picks it up.
+			result = payload.get("result")
+			if isinstance(result, dict) and not result.get("username"):
+				result["username"] = agent
+			return payload
 	except requests.exceptions.RequestException as e:
 		frappe.log_error(str(e), "WebSprix get_user_settings")
 	return None
