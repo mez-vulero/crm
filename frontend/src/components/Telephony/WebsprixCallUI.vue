@@ -255,6 +255,7 @@ let ringTone = null
 let referer = ref('')
 let organizationUsers = ref([])
 let activeSession = null
+let outgoingUserCancelled = false
 let userAgent = null
 let registerer = null
 let sipServer = ''
@@ -391,6 +392,7 @@ function hangUpCall() {
 
 function cancelCall() {
   if (!activeSession) return
+  outgoingUserCancelled = true
   if (activeSession.state === 'Initial' || activeSession.state === 'Established') {
     activeSession.bye()
   } else if (activeSession.state === 'Establishing') {
@@ -464,7 +466,10 @@ async function startupClient() {
     },
     transportOptions: {
       server: wsServer,
-      traceSip: false,
+      // Log every SIP message in/out of the browser. Costs a bit of console
+      // noise but is the only way to see the PBX's WWW-Authenticate header
+      // and 401/403 reasons during onboarding/debugging.
+      traceSip: true,
       keepAliveInterval: 5,
     },
     register: false,
@@ -589,9 +594,11 @@ async function makeOutgoingCall(number) {
   })
 
   activeSession = inviter
+  outgoingUserCancelled = false
   // Track whether the call ever connected so a Terminated transition that
   // happens before Established (e.g. PBX 401, 403, 404) can be surfaced as
-  // a failure instead of silently closing the popup.
+  // a failure instead of silently closing the popup. We also need to
+  // distinguish PBX-initiated termination from user-clicked Cancel.
   let callEverEstablished = false
 
   phoneNumber.value = number
@@ -623,13 +630,18 @@ async function makeOutgoingCall(number) {
         window.dispatchEvent(new CustomEvent('queueEvent', { detail: dtmfType }))
         break
       case SessionState.Terminated:
-        if (!callEverEstablished && number[0] !== '*') {
+        if (
+          !callEverEstablished &&
+          !outgoingUserCancelled &&
+          number[0] !== '*'
+        ) {
           toast.error(
             __(
               'Call could not be placed. The PBX rejected the call (check the browser console for a 401/403 from sip.js).',
             ),
           )
         }
+        outgoingUserCancelled = false
         activeSession = null
         calling.value = false
         contact.value = { full_name: '', mobile_no: '', user_link: '', docname: '', doctype: '' }
