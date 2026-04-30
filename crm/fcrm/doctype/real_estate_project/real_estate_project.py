@@ -53,6 +53,12 @@ class RealEstateProject(Document):
 				"width": "7rem",
 			},
 			{
+				"label": "Progress",
+				"type": "Percent",
+				"key": "completion_progress",
+				"width": "10rem",
+			},
+			{
 				"label": "Launch Date",
 				"type": "Date",
 				"key": "launch_date",
@@ -75,6 +81,7 @@ class RealEstateProject(Document):
 			"available_units",
 			"reserved_units",
 			"sold_units",
+			"completion_progress",
 			"launch_date",
 			"delivery_date",
 			"image",
@@ -112,6 +119,87 @@ def get_unit_summary(project: str) -> dict:
 		"blocked": sum(1 for u in units if u.status == "Blocked"),
 	}
 	return summary
+
+
+@frappe.whitelist()
+def get_project_financial_stats(project: str) -> dict:
+	if not frappe.has_permission("Real Estate Project", "read", project):
+		frappe.throw(_("Not permitted"), frappe.PermissionError)
+
+	paid = (
+		frappe.db.sql(
+			"""SELECT COALESCE(SUM(amount_received), 0)
+			FROM `tabPayment Collection`
+			WHERE project = %s AND status != 'Refunded'""",
+			project,
+		)[0][0]
+		or 0
+	)
+
+	scheduled = (
+		frappe.db.sql(
+			"""SELECT COALESCE(SUM(ps.amount), 0)
+			FROM `tabPayment Schedule` ps
+			INNER JOIN `tabCRM Deal` d
+				ON ps.parent = d.name AND ps.parenttype = 'CRM Deal'
+			WHERE d.re_project = %s""",
+			project,
+		)[0][0]
+		or 0
+	)
+
+	outstanding = max((scheduled or 0) - (paid or 0), 0)
+
+	today = frappe.utils.today()
+	overdue_rows = frappe.db.sql(
+		"""SELECT COUNT(*) AS cnt, COALESCE(SUM(ps.amount), 0) AS amt
+		FROM `tabPayment Schedule` ps
+		INNER JOIN `tabCRM Deal` d
+			ON ps.parent = d.name AND ps.parenttype = 'CRM Deal'
+		WHERE d.re_project = %s AND ps.due_date < %s AND ps.status != 'Paid'""",
+		(project, today),
+		as_dict=True,
+	)
+	overdue = {
+		"count": overdue_rows[0].cnt if overdue_rows else 0,
+		"amount": overdue_rows[0].amt if overdue_rows else 0,
+	}
+
+	commission_rows = frappe.db.sql(
+		"""SELECT status, COALESCE(SUM(final_commission), 0) AS amt
+		FROM `tabSales Commission`
+		WHERE project = %s
+		GROUP BY status""",
+		project,
+		as_dict=True,
+	)
+	commissions_by_status = {r.status or "Unknown": r.amt for r in commission_rows}
+	total_commission = sum(commissions_by_status.values())
+
+	contracted = (
+		frappe.db.sql(
+			"""SELECT COALESCE(SUM(purchase_price), 0)
+			FROM `tabProperty Contract`
+			WHERE project = %s AND status != 'Cancelled'""",
+			project,
+		)[0][0]
+		or 0
+	)
+
+	return {
+		"paid": paid,
+		"scheduled": scheduled,
+		"outstanding": outstanding,
+		"contracted": contracted,
+		"overdue": overdue,
+		"commissions": {
+			"total": total_commission,
+			"pending": commissions_by_status.get("Pending", 0),
+			"approved": commissions_by_status.get("Approved", 0),
+			"paid": commissions_by_status.get("Paid", 0),
+			"cancelled": commissions_by_status.get("Cancelled", 0),
+		},
+	}
 
 
 @frappe.whitelist()

@@ -58,6 +58,21 @@
                 {{ __('Delivery') }}: {{ formatDate(doc.delivery_date) }}
               </span>
             </div>
+            <div class="mt-3 max-w-md">
+              <div class="mb-1 flex items-center justify-between text-xs text-ink-gray-5">
+                <span>{{ __('Construction Progress') }}</span>
+                <span class="font-medium text-ink-gray-7">
+                  {{ progressPercent }}%
+                </span>
+              </div>
+              <div class="h-2 w-full overflow-hidden rounded-full bg-surface-gray-2">
+                <div
+                  class="h-full rounded-full transition-all"
+                  :class="progressBarColor"
+                  :style="{ width: `${progressPercent}%` }"
+                />
+              </div>
+            </div>
           </div>
           <Button
             v-if="doc.image"
@@ -68,7 +83,7 @@
           />
         </div>
         <!-- Unit Summary Cards -->
-        <div class="mt-4 grid grid-cols-4 gap-3">
+        <div class="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
           <div
             v-for="stat in unitStats"
             :key="stat.label"
@@ -77,6 +92,72 @@
             <div class="text-sm text-ink-gray-5">{{ stat.label }}</div>
             <div class="mt-1 text-xl font-semibold text-ink-gray-9">
               {{ stat.value }}
+            </div>
+          </div>
+        </div>
+
+        <!-- Financial Stats Cards -->
+        <div class="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div class="rounded-lg border p-3">
+            <div class="text-sm text-ink-gray-5">{{ __('Total Paid') }}</div>
+            <div class="mt-1 text-xl font-semibold text-ink-gray-9">
+              {{ formatCurrency(financialStats.paid) }}
+            </div>
+            <div class="mt-1 text-xs text-ink-gray-5">
+              {{ __('of') }}
+              {{ formatCurrency(financialStats.scheduled) }}
+              {{ __('scheduled') }}
+            </div>
+          </div>
+          <div class="rounded-lg border p-3">
+            <div class="text-sm text-ink-gray-5">
+              {{ __('Outstanding') }}
+            </div>
+            <div
+              class="mt-1 text-xl font-semibold"
+              :class="financialStats.outstanding > 0 ? 'text-ink-amber-3' : 'text-ink-gray-9'"
+            >
+              {{ formatCurrency(financialStats.outstanding) }}
+            </div>
+            <div
+              v-if="financialStats.overdue?.count"
+              class="mt-1 text-xs text-ink-red-3"
+            >
+              {{ financialStats.overdue.count }}
+              {{ __('overdue') }}
+              ({{ formatCurrency(financialStats.overdue.amount) }})
+            </div>
+            <div v-else class="mt-1 text-xs text-ink-gray-5">
+              {{ __('No overdue payments') }}
+            </div>
+          </div>
+          <div class="rounded-lg border p-3">
+            <div class="text-sm text-ink-gray-5">
+              {{ __('Contracted Value') }}
+            </div>
+            <div class="mt-1 text-xl font-semibold text-ink-gray-9">
+              {{ formatCurrency(financialStats.contracted) }}
+            </div>
+            <div class="mt-1 text-xs text-ink-gray-5">
+              {{ __('Sold units') }}: {{ doc.sold_units || 0 }}
+            </div>
+          </div>
+          <div class="rounded-lg border p-3">
+            <div class="text-sm text-ink-gray-5">
+              {{ __('Total Commission') }}
+            </div>
+            <div class="mt-1 text-xl font-semibold text-ink-gray-9">
+              {{ formatCurrency(financialStats.commissions?.total) }}
+            </div>
+            <div class="mt-1 flex flex-wrap gap-x-2 text-xs text-ink-gray-5">
+              <span>
+                {{ __('Pending') }}:
+                {{ formatCurrency(financialStats.commissions?.pending) }}
+              </span>
+              <span>
+                {{ __('Paid') }}:
+                {{ formatCurrency(financialStats.commissions?.paid) }}
+              </span>
             </div>
           </div>
         </div>
@@ -119,7 +200,7 @@
       </div>
 
       <!-- Filter Bar -->
-      <div class="flex items-center gap-3 border-b px-5 py-3">
+      <div class="flex flex-wrap items-end gap-3 border-b px-5 py-3">
         <FormControl
           v-model="filters.status"
           type="select"
@@ -144,6 +225,67 @@
             @change="(v) => (filters.unit_type = v || '')"
           />
         </div>
+        <FormControl
+          v-model="filters.furnishing"
+          type="select"
+          :label="__('Furnishing')"
+          :options="[
+            { label: __('Any'), value: '' },
+            { label: __('Unfurnished'), value: 'Unfurnished' },
+            { label: __('Semi-Furnished'), value: 'Semi-Furnished' },
+            { label: __('Furnished'), value: 'Furnished' },
+          ]"
+          class="w-40"
+        />
+        <FormControl
+          v-model="filters.view_direction"
+          type="select"
+          :label="__('View')"
+          :options="[
+            { label: __('Any'), value: '' },
+            { label: __('Garden'), value: 'Garden' },
+            { label: __('City'), value: 'City' },
+            { label: __('Sea'), value: 'Sea' },
+            { label: __('Courtyard'), value: 'Courtyard' },
+            { label: __('Street'), value: 'Street' },
+          ]"
+          class="w-32"
+        />
+        <FormControl
+          v-model="filters.bedrooms"
+          type="select"
+          :label="__('Bedrooms')"
+          :options="bedroomOptions"
+          class="w-32"
+        />
+        <FormControl
+          v-model="filters.floor"
+          type="number"
+          :label="__('Floor')"
+          :placeholder="__('Any')"
+          class="w-24"
+        />
+        <FormControl
+          v-model="filters.min_price"
+          type="number"
+          :label="__('Min Price')"
+          :placeholder="__('Any')"
+          class="w-32"
+        />
+        <FormControl
+          v-model="filters.max_price"
+          type="number"
+          :label="__('Max Price')"
+          :placeholder="__('Any')"
+          class="w-32"
+        />
+        <Button
+          v-if="hasActiveUnitFilters"
+          variant="ghost"
+          size="sm"
+          :label="__('Clear filters')"
+          @click="clearUnitFilters"
+        />
         <div class="ml-auto flex items-center gap-3">
           <span class="text-sm text-ink-gray-5">
             {{ filteredUnits.length }} {{ __('units') }}
@@ -671,6 +813,7 @@ import {
   call,
   createListResource,
   createDocumentResource,
+  createResource,
   toast,
 } from 'frappe-ui'
 import { ref, reactive, computed, watch } from 'vue'
@@ -701,6 +844,15 @@ const unitStats = computed(() => [
   { label: __('Reserved'), value: doc.value.reserved_units || 0 },
   { label: __('Sold'), value: doc.value.sold_units || 0 },
 ])
+
+const progressPercent = computed(() => {
+  const v = Number(doc.value.completion_progress || 0)
+  return Math.max(0, Math.min(100, Math.round(v)))
+})
+
+const progressBarColor = computed(() =>
+  progressPercent.value >= 100 ? 'bg-green-500' : 'bg-blue-500',
+)
 
 const specsList = computed(() => {
   const d = doc.value
@@ -755,13 +907,64 @@ function statusDotClass(status) {
   return classes[status] || 'bg-gray-500'
 }
 
+// Financial stats
+const financialStatsResource = createResource({
+  url: 'crm.fcrm.doctype.real_estate_project.real_estate_project.get_project_financial_stats',
+  params: { project: props.projectId },
+  auto: true,
+})
+
+const financialStats = computed(() => financialStatsResource.data || {})
+
 // Units
-const filters = reactive({ status: '', unit_type: '' })
+const filters = reactive({
+  status: '',
+  unit_type: '',
+  furnishing: '',
+  view_direction: '',
+  bedrooms: '',
+  floor: '',
+  min_price: '',
+  max_price: '',
+})
+
+const bedroomOptions = computed(() => [
+  { label: __('Any'), value: '' },
+  { label: __('Studio (0)'), value: '0' },
+  { label: '1', value: '1' },
+  { label: '2', value: '2' },
+  { label: '3', value: '3' },
+  { label: '4', value: '4' },
+  { label: '5+', value: '5+' },
+])
+
+const hasActiveUnitFilters = computed(() =>
+  Object.entries(filters).some(([k, v]) => v !== '' && v !== null && v !== undefined),
+)
+
+function clearUnitFilters() {
+  filters.status = ''
+  filters.unit_type = ''
+  filters.furnishing = ''
+  filters.view_direction = ''
+  filters.bedrooms = ''
+  filters.floor = ''
+  filters.min_price = ''
+  filters.max_price = ''
+}
 
 const unitFilters = computed(() => {
   const f = { project: props.projectId }
   if (filters.status) f.status = filters.status
   if (filters.unit_type) f.unit_type = filters.unit_type
+  if (filters.furnishing) f.furnishing = filters.furnishing
+  if (filters.view_direction) f.view_direction = filters.view_direction
+  if (filters.bedrooms) {
+    f.bedrooms = filters.bedrooms === '5+' ? ['>=', 5] : Number(filters.bedrooms)
+  }
+  if (filters.floor !== '' && filters.floor !== null) {
+    f.floor = Number(filters.floor)
+  }
   return f
 })
 
@@ -806,7 +1009,22 @@ watch(unitFilters, () => {
 
 const unitsLoading = computed(() => units.loading)
 
-const filteredUnits = computed(() => units.data || [])
+function unitPrice(unit) {
+  return Number(unit.price_override || unit.base_price || 0)
+}
+
+const filteredUnits = computed(() => {
+  const list = units.data || []
+  const min = filters.min_price !== '' ? Number(filters.min_price) : null
+  const max = filters.max_price !== '' ? Number(filters.max_price) : null
+  if (min === null && max === null) return list
+  return list.filter((u) => {
+    const p = unitPrice(u)
+    if (min !== null && p < min) return false
+    if (max !== null && p > max) return false
+    return true
+  })
+})
 
 function formatPrice(unit) {
   const price = unit.price_override || unit.base_price
@@ -891,6 +1109,7 @@ async function applyBulkStatus() {
     clearSelection()
     units.reload()
     project.reload()
+    financialStatsResource.reload()
   } catch (err) {
     toast.error(err.messages?.[0] || __('Bulk status update failed'))
   } finally {
@@ -952,6 +1171,7 @@ async function reserveUnit() {
     showUnitDetail.value = false
     units.reload()
     project.reload()
+    financialStatsResource.reload()
   } catch (err) {
     toast.error(err.messages?.[0] || __('Error reserving unit'))
   } finally {
@@ -1056,6 +1276,7 @@ async function addUnit() {
     newUnit.bathrooms = ''
     units.reload()
     project.reload()
+    financialStatsResource.reload()
   } catch (err) {
     toast.error(err.messages?.[0] || __('Error adding unit'))
   } finally {

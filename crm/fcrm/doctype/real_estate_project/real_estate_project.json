@@ -26,6 +26,7 @@
   "launch_date",
   "column_break_rep03",
   "delivery_date",
+  "completion_progress",
   "units_section",
   "total_units",
   "available_units",
@@ -144,6 +145,14 @@
    "label": "Delivery Date"
   },
   {
+   "default": "0",
+   "description": "Construction completion percentage (0-100). Updated manually as the project progresses.",
+   "fieldname": "completion_progress",
+   "fieldtype": "Percent",
+   "in_list_view": 1,
+   "label": "Completion Progress"
+  },
+  {
    "fieldname": "units_section",
    "fieldtype": "Section Break",
    "label": "Unit Summary"
@@ -208,7 +217,7 @@
  ],
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-04-21 00:00:00.000000",
+ "modified": "2026-04-30 00:00:00.000000",
  "modified_by": "Administrator",
  "module": "FCRM",
  "name": "Real Estate Project",

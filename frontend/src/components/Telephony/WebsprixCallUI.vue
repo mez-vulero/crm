@@ -76,7 +76,13 @@
             :icon="TaskIcon"
             @click="openTaskModal"
           />
-          <Button class="rounded-full bg-red-600 hover:bg-red-700" :tooltip="__('Hang up')" @click="hangUpCall">
+          <Button
+            variant="solid"
+            theme="red"
+            class="rounded-full"
+            :tooltip="__('Hang up')"
+            @click="hangUpCall"
+          >
             <template #icon>
               <PhoneIcon class="h-4 w-4 rotate-[135deg] fill-white text-white" />
             </template>
@@ -170,15 +176,15 @@
   <NoteModal
     v-model="showNoteModal"
     :note="note"
-    doctype="CRM Call Log"
-    :doc="currentCallLogId"
+    :doctype="referenceDoctype"
+    :doc="referenceDocname"
     @after="updateNote"
   />
   <TaskModal
     v-model="showTaskModal"
     :task="task"
-    doctype="CRM Call Log"
-    :doc="currentCallLogId"
+    :doctype="referenceDoctype"
+    :doc="referenceDocname"
     @after="updateTask"
   />
 </template>
@@ -205,7 +211,7 @@ import router from '@/router'
 import { useDraggable, useWindowSize } from '@vueuse/core'
 import { globalStore } from '@/stores/global'
 import { Avatar, call, createResource, toast } from 'frappe-ui'
-import { onBeforeUnmount, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 
 const { setMakeCall, $socket } = globalStore()
 
@@ -265,18 +271,47 @@ const getContact = createResource({
     return ['contact', phoneNumber.value]
   },
   onSuccess(data) {
+    const isSavedContact = Boolean(data?.full_name)
     contact.value = {
       ...contact.value,
       ...(data || {}),
       mobile_no: data?.mobile_no || phoneNumber.value,
-      full_name: data?.full_name || phoneNumber.value || 'Unknown',
+      full_name: isSavedContact ? data.full_name : __('Unsaved'),
     }
   },
 })
 
 watch(phoneNumber, (value) => {
   if (!value) return
+  // Show the number with an "Unsaved" placeholder immediately; the
+  // backend lookup will overwrite both fields once a match is found.
+  contact.value = {
+    full_name: __('Unsaved'),
+    image: '',
+    mobile_no: value,
+    doctype: '',
+    docname: '',
+  }
   getContact.fetch()
+})
+
+// Prefer the resolved Lead/Deal as the note/task reference so the saved
+// item also appears on the lead/deal page. Fall back to the Call Log only
+// when we actually have one (a missing reference_docname would make the
+// insert fail, which is what stopped the dialog from closing before).
+const referenceDoctype = computed(() => {
+  const dt = contact.value?.doctype
+  if ((dt === 'CRM Lead' || dt === 'CRM Deal') && contact.value?.docname) {
+    return dt
+  }
+  return currentCallLogId.value ? 'CRM Call Log' : ''
+})
+const referenceDocname = computed(() => {
+  const dt = contact.value?.doctype
+  if ((dt === 'CRM Lead' || dt === 'CRM Deal') && contact.value?.docname) {
+    return contact.value.docname
+  }
+  return currentCallLogId.value || ''
 })
 
 const { width, height } = useWindowSize()
@@ -663,6 +698,7 @@ async function openTaskModal() {
 
 async function updateNote(_note, insert_mode = false) {
   note.value = _note
+  showNoteModal.value = false
   if (insert_mode && _note?.name && currentCallLogId.value) {
     try {
       await call('crm.integrations.api.add_note_to_call_log', {
@@ -677,6 +713,7 @@ async function updateNote(_note, insert_mode = false) {
 
 async function updateTask(_task, insert_mode = false) {
   task.value = _task
+  showTaskModal.value = false
   if (insert_mode && _task?.name && currentCallLogId.value) {
     try {
       await call('crm.integrations.api.add_task_to_call_log', {

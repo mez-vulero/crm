@@ -46,6 +46,21 @@
             />
           </div>
           <div
+            v-else-if="column.key === 'completion_progress'"
+            class="flex items-center gap-2 text-sm"
+          >
+            <div class="h-1.5 w-20 overflow-hidden rounded-full bg-surface-gray-2">
+              <div
+                class="h-full rounded-full"
+                :class="progressBarColor(label)"
+                :style="{ width: `${clampPercent(label)}%` }"
+              />
+            </div>
+            <span class="tabular-nums text-ink-gray-7">
+              {{ clampPercent(label) }}%
+            </span>
+          </div>
+          <div
             v-else-if="['modified', 'creation'].includes(column.key)"
             class="truncate text-base"
             @click="
@@ -130,6 +145,16 @@ function getStatusColor(status) {
     'Delivered': 'gray',
   }
   return colors[status] || 'gray'
+}
+
+function clampPercent(value) {
+  const n = Number(value || 0)
+  if (Number.isNaN(n)) return 0
+  return Math.max(0, Math.min(100, Math.round(n)))
+}
+
+function progressBarColor(value) {
+  return clampPercent(value) >= 100 ? 'bg-green-500' : 'bg-blue-500'
 }
 
 watch(pageLengthCount, (val, old_value) => {
