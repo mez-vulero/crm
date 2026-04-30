@@ -134,7 +134,7 @@ def fetch_users_to_transfer():
 
 
 @frappe.whitelist()
-def get_deal_lead_or_contact_from_number(phone_number):
+def get_deal_lead_or_contact_from_number(phone_number: str):
 	"""Get contact, lead or deal from the given number."""
 	contact = get_contact_by_phone_number(phone_number)
 
