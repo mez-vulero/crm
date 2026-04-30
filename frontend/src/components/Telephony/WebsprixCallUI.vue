@@ -571,14 +571,6 @@ async function makeOutgoingCall(number) {
     toast.error(__('WebSprix is not registered. Please reload.'))
     return
   }
-  if (!registered.value) {
-    toast.error(
-      __(
-        'WebSprix SIP client is not registered with the PBX yet. Please wait a moment and try again, or reload if this persists.',
-      ),
-    )
-    return
-  }
 
   referer.value = ''
   let dtmfType = number
