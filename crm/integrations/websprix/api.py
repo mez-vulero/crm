@@ -60,6 +60,30 @@ def _safe_run(fn):
 		return {"status": "error", "message": str(e)}
 
 
+def sync_call_logs_on_login(login_manager=None):
+	"""on_login hook: pull WebSprix call logs for the user that just logged in.
+	Failures are swallowed — login should never fail because of a PBX hiccup.
+	"""
+	try:
+		if not frappe.db.get_single_value("CRM WebSprix Settings", "enabled"):
+			return
+		user = frappe.session.user
+		if not user or user == "Guest":
+			return
+		agent = frappe.db.get_value(
+			"CRM Telephony Agent",
+			{"user": user, "websprix": 1},
+			"websprix_number",
+		)
+		if not agent:
+			return
+		_safe_run(fetch_and_process_incoming_call_logs)
+		_safe_run(fetch_and_process_outgoing_call_logs)
+		_safe_run(fetch_and_process_missed_call_logs)
+	except Exception:
+		frappe.log_error(frappe.get_traceback(), "WebSprix sync_call_logs_on_login")
+
+
 def sync_call_logs_for_all_agents():
 	"""Scheduler entry point: pull call logs from WebSprix for every enabled agent."""
 	if not frappe.db.get_single_value("CRM WebSprix Settings", "enabled"):
@@ -100,13 +124,32 @@ def _get_headers():
 	return {"x-api-key": settings.api_key}
 
 
+def _append_recording_token(url: str | None) -> str:
+	"""Append the WebSprix API key as ?token=… so the recording URL is playable.
+	The vendor's recording endpoint requires the same key as the REST API.
+	"""
+	if not url:
+		return ""
+	api_key = (_get_settings().api_key or "").strip()
+	if not api_key:
+		return url
+	separator = "&" if "?" in url else "?"
+	return f"{url}{separator}token={api_key}"
+
+
 @frappe.whitelist()
 def get_user_settings():
 	"""Fetch SIP connection details (SIP server, username, password) for the current user."""
 	user = frappe.session.user
-	agent = frappe.db.get_value("CRM Telephony Agent", user, "websprix_number")
-	if not agent:
+	agent_row = frappe.db.get_value(
+		"CRM Telephony Agent",
+		user,
+		["websprix_number", "websprix_auth_username"],
+		as_dict=True,
+	)
+	if not agent_row or not agent_row.websprix_number:
 		return None
+	agent = agent_row.websprix_number
 
 	settings = _get_settings()
 	url = f"{_get_base_url()}/onboard//get_ip_info/{settings.organization_id}/{agent}/1"
@@ -115,13 +158,21 @@ def get_user_settings():
 		resp = requests.get(url, headers=_get_headers(), timeout=10)
 		if resp.status_code in [200, 201]:
 			payload = resp.json() or {}
-			# The PBX response doesn't echo the SIP username (we passed it in
-			# the URL), but the sip.js client needs it both for the From URI
-			# and for the digest-auth username. Inject it from the agent's
-			# websprix_number so the frontend destructure picks it up.
 			result = payload.get("result")
-			if isinstance(result, dict) and not result.get("username"):
-				result["username"] = agent
+			if isinstance(result, dict):
+				# The PBX response doesn't echo a SIP username (we passed it
+				# in the URL), but the sip.js client needs one for both the
+				# From URI and the digest-auth username. Fill it in from the
+				# agent profile if missing.
+				if not result.get("username"):
+					result["username"] = agent
+				# Some WebSprix Asterisk tenants register the auth peer
+				# under a different identifier than the SIP From user
+				# (e.g. bare extension vs. {customer_id}S{extension}). Let
+				# the agent profile override the digest-auth username
+				# without changing the URI.
+				if agent_row.websprix_auth_username:
+					result["auth_username"] = agent_row.websprix_auth_username
 			return payload
 	except requests.exceptions.RequestException as e:
 		frappe.log_error(str(e), "WebSprix get_user_settings")
@@ -391,26 +442,6 @@ def leave_queue() -> dict:
 	return {"joined": False, "queue_id": queue_id}
 
 
-@frappe.whitelist()
-def get_queue_settings() -> dict:
-	user = frappe.session.user
-	if user == "Guest":
-		frappe.throw(_("You must be logged in to access this method"), frappe.PermissionError)
-
-	try:
-		settings = frappe.get_all(
-			"Extensions",
-			filters={"user_link": user},
-			fields=["join_dtmf", "leave_dtmf", "extension"],
-		)
-		if settings:
-			return settings[0]
-		return []
-	except Exception:
-		frappe.log_error(frappe.get_traceback(), "WebSprix get_queue_settings")
-		return None
-
-
 def _get_user_queue_interface():
 	"""Build the `{customer_id}S{extension}` interface string used by queue APIs."""
 	user = frappe.session.user
@@ -554,7 +585,7 @@ def _create_incoming_call_log(log, user_link=None, off_hour=False):
 				"to": to_number,
 				"receiver": user_link,
 				"duration": int(log.get("duration") or 0),
-				"recording_url": log.get("recording_url") or "",
+				"recording_url": _append_recording_token(log.get("recording_url")),
 				"status": _map_log_status(log.get("disposition")),
 				"start_time": log.get("created_at"),
 			}
@@ -689,11 +720,15 @@ def fetch_and_process_outgoing_call_logs(
 	skipped = 0
 	for row in rows:
 		try:
-			from_number = row.get("src") or row.get("caller") or row.get("from") or ""
-			to_number_raw = (
+			from_raw = row.get("src") or row.get("caller") or row.get("from") or ""
+			to_raw = (
 				row.get("dst") or row.get("callee") or row.get("to") or row.get("number") or ""
 			)
-			to_number = format_phone_number(to_number_raw) or to_number_raw
+			# Normalise both numbers — WebSprix outgoing logs have raw extension/E.164
+			# variants on either side. Other call mediums (Twilio, Exotel) use their
+			# own pipelines and aren't touched.
+			from_number = format_phone_number(from_raw) or from_raw
+			to_number = format_phone_number(to_raw) or to_raw
 
 			if not from_number or not to_number:
 				skipped += 1
@@ -732,12 +767,11 @@ def fetch_and_process_outgoing_call_logs(
 				"caller": _resolve_agent_user(row.get("agent") or row.get("extension")) or user,
 				"duration": int(row.get("duration") or row.get("billsec") or 0),
 				"status": _map_log_status(row.get("disposition") or row.get("status")),
-				"recording_url": (
+				"recording_url": _append_recording_token(
 					row.get("recording_url")
 					or row.get("recording")
 					or row.get("recordingfile")
 					or row.get("recording_path")
-					or ""
 				),
 				"start_time": start_date,
 			}

@@ -198,6 +198,31 @@
           />
         </div>
       </div>
+      <div
+        v-if="websprixEnabled && telephonyAgent.doc.websprix"
+        class="flex items-center justify-between gap-8 py-3 pl-2 pr-1"
+      >
+        <div class="flex flex-col">
+          <div class="text-p-base font-medium text-ink-gray-7 truncate">
+            {{ __('SIP Auth Username Override') }}
+          </div>
+          <div class="text-p-sm text-ink-gray-5">
+            {{
+              __(
+                'Optional. Use only if calls fail with a 401. Set the bare extension if the PBX rejects the {customer_id}S{extension} form.',
+              )
+            }}
+          </div>
+        </div>
+        <div>
+          <FormControl
+            v-model="telephonyAgent.doc.websprix_auth_username"
+            class="flex-1 truncate w-44 p-1"
+            :placeholder="__('Leave blank for default')"
+            placement="bottom-end"
+          />
+        </div>
+      </div>
 
       <div
         v-if="isManager()"

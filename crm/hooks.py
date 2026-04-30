@@ -194,6 +194,8 @@ doc_events = {
 	},
 }
 
+on_login = ["crm.integrations.websprix.api.sync_call_logs_on_login"]
+
 # Scheduled Tasks
 # ---------------
 

@@ -211,9 +211,9 @@ import router from '@/router'
 import { useDraggable, useWindowSize } from '@vueuse/core'
 import { globalStore } from '@/stores/global'
 import { Avatar, call, createResource, toast } from 'frappe-ui'
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 
-const { setMakeCall, $socket } = globalStore()
+const { setMakeCall } = globalStore()
 
 const contact = ref({
   full_name: '',
@@ -261,8 +261,14 @@ let registerer = null
 let sipServer = ''
 let wsDetails = null
 const registered = ref(false)
-let joinDTMF = null
-let leaveDTMF = null
+// Reconnect state for the SIP transport. Patterned after vulero_dialer:
+// retry up to 10× on TransportState.Disconnected; after the 3rd attempt,
+// swap from the primary to the secondary SIP address (if the PBX returned one).
+let connectAttempt = 0
+let reconnectTimer = null
+const RECONNECT_MAX_ATTEMPTS = 10
+const RECONNECT_DELAY_MS = 5000
+const SECONDARY_AFTER_ATTEMPTS = 3
 
 const getContact = createResource({
   url: 'crm.integrations.websprix.api.get_deal_lead_or_contact_from_number',
@@ -436,20 +442,47 @@ function cleanupMedia() {
 }
 
 async function startupClient() {
+  connectAttempt += 1
   try {
     wsDetails = await call('crm.integrations.websprix.api.get_user_settings')
   } catch (e) {
     console.warn('[WebSprix] Could not fetch user settings:', e)
+    scheduleReconnect()
     return
   }
   if (!wsDetails || !wsDetails.result) return
 
-  const { username, ep_pass, cid_name, pri_sip_address, sec_sip_address } = wsDetails.result
-  sipServer = pri_sip_address || sec_sip_address
+  const {
+    username,
+    auth_username,
+    ep_pass,
+    cid_name,
+    pri_sip_address,
+    sec_sip_address,
+  } = wsDetails.result
+  // Failover: after a few failed attempts on the primary address, swap to the
+  // secondary one the PBX returned (matches vulero_dialer's behaviour).
+  sipServer =
+    connectAttempt > SECONDARY_AFTER_ATTEMPTS && sec_sip_address
+      ? sec_sip_address
+      : pri_sip_address || sec_sip_address
   const wsServer = `wss://${sipServer}:8089/ws`
 
   const uri = UserAgent.makeURI(`sip:${username}@${sipServer}`)
   if (!uri) return
+
+  // Pick the digest-auth username with this precedence:
+  //   1. `auth_username` from the API (set when the agent's
+  //      "WebSprix Auth Username Override" field is filled in).
+  //   2. Otherwise, if the SIP user is in {customer_id}S{extension} form,
+  //      try the bare extension — many WebSprix tenants register the auth
+  //      peer in Asterisk that way and the prefixed form 401s.
+  //   3. Otherwise, fall back to the SIP user as-is.
+  const authUsername =
+    auth_username ||
+    (typeof username === 'string' && username.includes('S')
+      ? username.split('S').slice(1).join('S')
+      : username)
 
   const uaConfig = {
     uri,
@@ -474,7 +507,7 @@ async function startupClient() {
     },
     register: false,
     hackIpInContact: true,
-    authorizationUsername: username,
+    authorizationUsername: authUsername,
     authorizationPassword: ep_pass,
     displayName: cid_name,
   }
@@ -489,6 +522,42 @@ async function startupClient() {
     }
   })
 
+  // Watch the underlying WebSocket transport. If it drops, schedule a
+  // reconnect — mirrors vulero_dialer/App.vue's TransportState handling so a
+  // network blip doesn't permanently break calls until the user reloads.
+  userAgent.transport.stateChange.addListener((newState) => {
+    switch (newState) {
+      case TransportState.Connected:
+        connectAttempt = 0
+        if (reconnectTimer) {
+          clearTimeout(reconnectTimer)
+          reconnectTimer = null
+        }
+        window.dispatchEvent(
+          new CustomEvent('statusEvent', { detail: 'connected' }),
+        )
+        break
+      case TransportState.Disconnecting:
+        window.dispatchEvent(
+          new CustomEvent('statusEvent', { detail: 'disconnecting' }),
+        )
+        break
+      case TransportState.Disconnected:
+        window.dispatchEvent(
+          new CustomEvent('statusEvent', { detail: 'disconnected' }),
+        )
+        scheduleReconnect()
+        break
+      case TransportState.Reconnecting:
+        window.dispatchEvent(
+          new CustomEvent('statusEvent', { detail: 'reconnecting' }),
+        )
+        break
+      default:
+        break
+    }
+  })
+
   userAgent.start().then(() => {
     registerer
       .register()
@@ -496,11 +565,44 @@ async function startupClient() {
         console.warn('[WebSprix] register failed:', err)
         toast.error(
           __(
-            'WebSprix SIP registration failed. Calls will not work until you reload the page.',
+            'WebSprix SIP registration failed. Retrying automatically; reload if calls keep failing.',
           ),
         )
       })
   })
+}
+
+function scheduleReconnect() {
+  if (reconnectTimer) return
+  if (connectAttempt >= RECONNECT_MAX_ATTEMPTS) {
+    console.warn(
+      '[WebSprix] Giving up on auto-reconnect after',
+      connectAttempt,
+      'attempts. Please reload.',
+    )
+    return
+  }
+  reconnectTimer = setTimeout(async () => {
+    reconnectTimer = null
+    console.warn(
+      '[WebSprix] Transport disconnected — attempting reconnect',
+      connectAttempt + 1,
+    )
+    try {
+      // sip.js doesn't expose a clean way to swap servers on an existing UA,
+      // so tear down and rebuild. The new userAgent picks up sec_sip_address
+      // automatically once SECONDARY_AFTER_ATTEMPTS is exceeded.
+      if (userAgent) {
+        try {
+          await userAgent.stop()
+        } catch (e) {
+          // ignore — we're rebuilding anyway
+        }
+      }
+    } finally {
+      await startupClient()
+    }
+  }, RECONNECT_DELAY_MS)
 }
 
 async function onInvite(session) {
@@ -578,10 +680,6 @@ async function makeOutgoingCall(number) {
   }
 
   referer.value = ''
-  let dtmfType = number
-
-  if (number === 'join_queue' && joinDTMF != null) number = joinDTMF
-  else if (number === 'leave_queue' && leaveDTMF != null) number = leaveDTMF
 
   const target = UserAgent.makeURI(`sip:${number}@${sipServer}`)
   if (!target) return
@@ -627,7 +725,6 @@ async function makeOutgoingCall(number) {
         calling.value = false
         counterUp.value?.start?.()
         audioConfig(inviter)
-        window.dispatchEvent(new CustomEvent('queueEvent', { detail: dtmfType }))
         break
       case SessionState.Terminated:
         if (
@@ -635,10 +732,25 @@ async function makeOutgoingCall(number) {
           !outgoingUserCancelled &&
           number[0] !== '*'
         ) {
+          // sip.js stores the most recent response on the inviter; pull the
+          // status / reason from it so the agent sees something useful
+          // instead of a generic "call failed".
+          const response =
+            inviter?.outgoingInviteRequest?.response ||
+            inviter?.response ||
+            null
+          const status = response?.statusCode
+          const reason = response?.reasonPhrase
+          let detail
+          if (status && reason) {
+            detail = `${status} ${reason}`
+          } else if (status) {
+            detail = String(status)
+          } else {
+            detail = __('check the browser console')
+          }
           toast.error(
-            __(
-              'Call could not be placed. The PBX rejected the call (check the browser console for a 401/403 from sip.js).',
-            ),
+            __('Call could not be placed: {0}', [detail]),
           )
         }
         outgoingUserCancelled = false
@@ -769,6 +881,9 @@ async function updateTask(_task, insert_mode = false) {
 }
 
 async function refreshCallLogs(type) {
+  // Give the PBX a few seconds to flush the call to its report endpoint
+  // before we poll. Without this, the next sync runs before WebSprix has the
+  // log and the user clicks "Add note" on a non-existent CRM Call Log.
   await new Promise((resolve) => setTimeout(resolve, 4000))
   try {
     if (type === 'incoming') {
@@ -779,7 +894,12 @@ async function refreshCallLogs(type) {
     }
   } catch (e) {
     console.warn('[WebSprix] Post-call log sync failed:', e)
+    return
   }
+  // With the webhook gone, this is the only point at which a fresh CRM Call
+  // Log exists for the call we just hung up on — resolve it now so the
+  // "Add note" / "Add task" buttons have something to attach to.
+  await resolveCurrentCallLogId()
 }
 
 async function getOrganizationUsers() {
@@ -907,40 +1027,14 @@ async function setup() {
 
   await startupClient()
 
-  try {
-    const queueSettings = await call('crm.integrations.websprix.api.get_queue_settings')
-    if (queueSettings) {
-      joinDTMF = queueSettings.join_dtmf
-      leaveDTMF = queueSettings.leave_dtmf
-    }
-  } catch (e) {
-    // queue settings are optional
-  }
-
   window.addEventListener('callEvent', function (e) {
     makeOutgoingCall(e.detail.number)
   })
-
-  // Capture the CRM Call Log id as soon as the backend webhook fires so
-  // the "Add a note" / "Add a task" buttons have a reference to link to.
-  if ($socket && typeof $socket.on === 'function') {
-    $socket.on('websprix_call', (data) => {
-      if (data?.CallUUID) {
-        currentCallLogId.value = data.CallUUID
-      }
-    })
-  }
 
   await getOrganizationUsers()
   ringTone = await createRingTone()
   setMakeCall(makeOutgoingCall)
 }
-
-onBeforeUnmount(() => {
-  if ($socket && typeof $socket.off === 'function') {
-    $socket.off('websprix_call')
-  }
-})
 
 defineExpose({ setup, makeOutgoingCall })
 </script>

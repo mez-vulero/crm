@@ -7,7 +7,6 @@ from .api import (
 	fetch_users_to_transfer,
 	get_contact_info,
 	get_deal_lead_or_contact_from_number,
-	get_queue_settings,
 	get_queue_status,
 	get_user_settings,
 	join_queue,
@@ -16,4 +15,3 @@ from .api import (
 	remove_from_queue,
 	sync_call_logs_for_all_agents,
 )
-from .handler import *

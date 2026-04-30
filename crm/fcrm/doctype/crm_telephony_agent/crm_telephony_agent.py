@@ -26,6 +26,7 @@ class CRMTelephonyAgent(Document):
 		user: DF.Link
 		user_name: DF.Data | None
 		websprix: DF.Check
+		websprix_auth_username: DF.Data | None
 		websprix_number: DF.Data | None
 		websprix_queue_id: DF.Data | None
 	# end: auto-generated types

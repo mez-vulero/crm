@@ -19,6 +19,7 @@
   "section_break_websprix",
   "websprix",
   "websprix_number",
+  "websprix_auth_username",
   "column_break_websprix",
   "websprix_queue_id",
   "section_break_phlq",
@@ -106,6 +107,13 @@
    "fieldtype": "Data",
    "label": "WebSprix Number",
    "mandatory_depends_on": "websprix"
+  },
+  {
+   "depends_on": "websprix",
+   "description": "Optional. Override the SIP digest auth username if WebSprix's onboarding API returns one that the PBX rejects (typically when the PBX expects the bare extension instead of the {customer_id}S{extension} form). Leave blank to use whatever the API returns.",
+   "fieldname": "websprix_auth_username",
+   "fieldtype": "Data",
+   "label": "WebSprix Auth Username Override"
   },
   {
    "fieldname": "column_break_websprix",
