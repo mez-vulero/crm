@@ -248,9 +248,25 @@ def get_real_estate_dashboard() -> dict:
 		as_dict=True,
 	)
 	commissions = {r.status or "Unknown": r.amt for r in commission_rows}
+	total_commission = sum(commissions.values())
+
+	contracted = (
+		frappe.db.sql(
+			"""SELECT COALESCE(SUM(purchase_price), 0)
+			FROM `tabProperty Contract`
+			WHERE status != 'Cancelled'"""
+		)[0][0]
+		or 0
+	)
+
+	outstanding = max(outstanding, 0)
 
 	return {
 		"unit_funnel": unit_funnel,
+		"paid": collected or 0,
+		"scheduled": scheduled or 0,
+		"outstanding": outstanding,
+		"contracted": contracted,
 		"revenue": {
 			"scheduled": scheduled or 0,
 			"collected": collected or 0,
@@ -258,8 +274,10 @@ def get_real_estate_dashboard() -> dict:
 		},
 		"overdue": overdue,
 		"commissions": {
+			"total": total_commission,
 			"pending": commissions.get("Pending", 0),
 			"approved": commissions.get("Approved", 0),
 			"paid": commissions.get("Paid", 0),
+			"cancelled": commissions.get("Cancelled", 0),
 		},
 	}

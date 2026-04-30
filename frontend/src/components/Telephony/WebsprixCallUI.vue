@@ -259,6 +259,7 @@ let userAgent = null
 let registerer = null
 let sipServer = ''
 let wsDetails = null
+const registered = ref(false)
 let joinDTMF = null
 let leaveDTMF = null
 
@@ -476,8 +477,24 @@ async function startupClient() {
   userAgent = new UserAgent(uaConfig)
   registerer = new Registerer(userAgent)
 
+  registerer.stateChange.addListener((state) => {
+    registered.value = state === RegistererState.Registered
+    if (state === RegistererState.Unregistered) {
+      console.warn('[WebSprix] SIP registration is no longer active')
+    }
+  })
+
   userAgent.start().then(() => {
-    registerer.register().catch((err) => console.warn('[WebSprix] register failed:', err))
+    registerer
+      .register()
+      .catch((err) => {
+        console.warn('[WebSprix] register failed:', err)
+        toast.error(
+          __(
+            'WebSprix SIP registration failed. Calls will not work until you reload the page.',
+          ),
+        )
+      })
   })
 }
 
@@ -554,6 +571,14 @@ async function makeOutgoingCall(number) {
     toast.error(__('WebSprix is not registered. Please reload.'))
     return
   }
+  if (!registered.value) {
+    toast.error(
+      __(
+        'WebSprix SIP client is not registered with the PBX yet. Please wait a moment and try again, or reload if this persists.',
+      ),
+    )
+    return
+  }
 
   referer.value = ''
   let dtmfType = number
@@ -572,10 +597,10 @@ async function makeOutgoingCall(number) {
   })
 
   activeSession = inviter
-
-  await userAgent.start().then(() => inviter.invite()).catch((err) => {
-    console.error('[WebSprix] outgoing call error:', err)
-  })
+  // Track whether the call ever connected so a Terminated transition that
+  // happens before Established (e.g. PBX 401, 403, 404) can be surfaced as
+  // a failure instead of silently closing the popup.
+  let callEverEstablished = false
 
   phoneNumber.value = number
 
@@ -593,6 +618,7 @@ async function makeOutgoingCall(number) {
         earlyMediaConfig(inviter)
         break
       case SessionState.Established:
+        callEverEstablished = true
         callStatus.value = ''
         activeSession = inviter
         showCallPopup.value = true
@@ -605,6 +631,13 @@ async function makeOutgoingCall(number) {
         window.dispatchEvent(new CustomEvent('queueEvent', { detail: dtmfType }))
         break
       case SessionState.Terminated:
+        if (!callEverEstablished && number[0] !== '*') {
+          toast.error(
+            __(
+              'Call could not be placed. The PBX rejected the call (check the browser console for a 401/403 from sip.js).',
+            ),
+          )
+        }
         activeSession = null
         calling.value = false
         contact.value = { full_name: '', mobile_no: '', user_link: '', docname: '', doctype: '' }
@@ -621,6 +654,11 @@ async function makeOutgoingCall(number) {
       default:
         break
     }
+  })
+
+  inviter.invite().catch((err) => {
+    console.error('[WebSprix] outgoing call error:', err)
+    toast.error(__('Outgoing call failed: {0}', [err?.message || err]))
   })
 }
 

@@ -14,7 +14,7 @@
   </LayoutHeader>
   <div
     v-if="dashboard.data"
-    class="grid grid-cols-2 gap-3 px-3 pt-3 sm:grid-cols-4"
+    class="grid grid-cols-2 gap-3 px-3 pt-3 sm:grid-cols-3 lg:grid-cols-5"
   >
     <div class="rounded border p-3">
       <div class="text-xs text-ink-gray-5">{{ __('Unit Inventory') }}</div>
@@ -28,30 +28,60 @@
       </div>
     </div>
     <div class="rounded border p-3">
-      <div class="text-xs text-ink-gray-5">{{ __('Revenue Collection') }}</div>
+      <div class="text-xs text-ink-gray-5">{{ __('Total Paid') }}</div>
       <div class="mt-1 text-lg font-semibold">
-        {{ formatCurrency(dashboard.data.revenue?.collected) }}
+        {{ formatCurrency(dashboard.data.paid) }}
       </div>
       <div class="mt-1 text-xs text-ink-gray-7">
-        {{ __('Outstanding') }}: {{ formatCurrency(dashboard.data.revenue?.outstanding) }}
+        {{ __('of') }}
+        {{ formatCurrency(dashboard.data.scheduled) }}
+        {{ __('scheduled') }}
       </div>
     </div>
     <div class="rounded border p-3">
-      <div class="text-xs text-ink-gray-5">{{ __('Overdue Payments') }}</div>
-      <div class="mt-1 text-lg font-semibold text-ink-red-3">
-        {{ dashboard.data.overdue?.count || 0 }}
+      <div class="text-xs text-ink-gray-5">{{ __('Outstanding') }}</div>
+      <div
+        class="mt-1 text-lg font-semibold"
+        :class="dashboard.data.outstanding > 0 ? 'text-ink-amber-3' : ''"
+      >
+        {{ formatCurrency(dashboard.data.outstanding) }}
       </div>
-      <div class="mt-1 text-xs text-ink-gray-7">
-        {{ formatCurrency(dashboard.data.overdue?.amount) }}
+      <div
+        v-if="dashboard.data.overdue?.count"
+        class="mt-1 text-xs text-ink-red-3"
+      >
+        {{ dashboard.data.overdue.count }}
+        {{ __('overdue') }}
+        ({{ formatCurrency(dashboard.data.overdue.amount) }})
+      </div>
+      <div v-else class="mt-1 text-xs text-ink-gray-7">
+        {{ __('No overdue payments') }}
       </div>
     </div>
     <div class="rounded border p-3">
-      <div class="text-xs text-ink-gray-5">{{ __('Commissions Payable') }}</div>
+      <div class="text-xs text-ink-gray-5">{{ __('Contracted Value') }}</div>
       <div class="mt-1 text-lg font-semibold">
-        {{ formatCurrency(dashboard.data.commissions?.approved) }}
+        {{ formatCurrency(dashboard.data.contracted) }}
       </div>
       <div class="mt-1 text-xs text-ink-gray-7">
-        {{ __('Pending') }}: {{ formatCurrency(dashboard.data.commissions?.pending) }}
+        {{ __('Sold') }}: {{ dashboard.data.unit_funnel?.Sold || 0 }}
+        {{ __('units') }}
+      </div>
+    </div>
+    <div class="rounded border p-3">
+      <div class="text-xs text-ink-gray-5">{{ __('Total Commission') }}</div>
+      <div class="mt-1 text-lg font-semibold">
+        {{ formatCurrency(dashboard.data.commissions?.total) }}
+      </div>
+      <div class="mt-1 flex flex-wrap gap-x-2 text-xs text-ink-gray-7">
+        <span>
+          {{ __('Pending') }}:
+          {{ formatCurrency(dashboard.data.commissions?.pending) }}
+        </span>
+        <span>
+          {{ __('Paid') }}:
+          {{ formatCurrency(dashboard.data.commissions?.paid) }}
+        </span>
       </div>
     </div>
   </div>
